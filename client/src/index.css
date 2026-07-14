@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-wedding-beige text-wedding-dark font-poppins antialiased selection:bg-wedding-gold/30;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-jost font-semibold tracking-wide text-wedding-dark;
+  }
+}
+
+@layer components {
+  /* Soft Gold-gradient button with micro-animation */
+  .gold-button {
+    @apply relative overflow-hidden bg-gradient-to-r from-[#C9A66B] to-[#DFBE82] text-wedding-dark font-medium px-6 py-2.5 rounded-full shadow-md transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-[#C9A66B]/50;
+  }
+
+  /* Secondary outline button */
+  .outline-button {
+    @apply border border-wedding-brown/40 text-wedding-brown hover:bg-wedding-brown/5 px-6 py-2.5 rounded-full font-medium transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-wedding-brown/30;
+  }
+
+  /* Elegant wedding card */
+  .wedding-card {
+    @apply bg-wedding-cream border border-wedding-gold/10 rounded-2xl shadow-wedding p-6 hover:shadow-wedding-lg transition-shadow duration-300;
+  }
+
+  /* Custom input styling */
+  .wedding-input {
+    @apply bg-white border border-wedding-brown/20 rounded-xl px-4 py-2.5 w-full focus:outline-none focus:border-[#C9A66B] focus:ring-2 focus:ring-[#C9A66B]/20 transition-all duration-200 text-wedding-dark placeholder-gray-400;
+  }
+
+  /* Mandalas and decorative borders */
+  .floral-divider {
+    @apply relative flex items-center justify-center my-8 text-wedding-gold;
+  }
+  
+  .floral-divider::before, .floral-divider::after {
+    content: '';
+    @apply flex-grow border-t border-wedding-gold/30 mx-4;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom Scrollbar for premium feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-wedding-beige;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-wedding-gold/40 rounded-full hover:bg-wedding-gold/60;
+}
