@@ -65,8 +65,10 @@ export default function Events() {
       formData.append('coverImage', coverImageFile);
     }
 
+    const API_BASE = import.meta.env.PROD ? 'https://eventmanagment-e3qo.onrender.com' : '';
+
     try {
-      const res = await fetch('/api/couple/events', {
+      const res = await fetch(`${API_BASE}/api/couple/events`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('wedding_token')}`
@@ -114,8 +116,10 @@ export default function Events() {
       formData.append('coverImage', coverImageFile);
     }
 
+    const API_BASE = import.meta.env.PROD ? 'https://eventmanagment-e3qo.onrender.com' : '';
+
     try {
-      const res = await fetch(`/api/couple/events/${editingId}`, {
+      const res = await fetch(`${API_BASE}/api/couple/events/${editingId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('wedding_token')}`

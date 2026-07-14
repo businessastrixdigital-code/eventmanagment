@@ -90,8 +90,10 @@ export default function Photos() {
       formData.append('eventId', eventId);
     }
 
+    const API_BASE = import.meta.env.PROD ? 'https://eventmanagment-e3qo.onrender.com' : '';
+
     try {
-      const res = await fetch('/api/couple/photos', {
+      const res = await fetch(`${API_BASE}/api/couple/photos`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('wedding_token')}`

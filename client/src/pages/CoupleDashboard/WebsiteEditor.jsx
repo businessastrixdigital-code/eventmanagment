@@ -75,8 +75,10 @@ export default function WebsiteEditor() {
     setSuccess('');
     setUploadingCover(true);
 
+    const API_BASE = import.meta.env.PROD ? 'https://eventmanagment-e3qo.onrender.com' : '';
+
     try {
-      const res = await fetch('/api/couple/profile', {
+      const res = await fetch(`${API_BASE}/api/couple/profile`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('wedding_token')}`
