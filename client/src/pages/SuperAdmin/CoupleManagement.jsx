@@ -249,7 +249,6 @@ export default function CoupleManagement() {
     setGroomName('');
     setMobile('');
     setWeddingDate('');
-    setPlanType('Free');
     setBrideMobile('');
     setBrideUsername('');
     setBridePassword('');
