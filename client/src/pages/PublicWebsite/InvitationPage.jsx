@@ -8,6 +8,7 @@ import {
 
 export default function InvitationPage() {
   const { coupleSlug } = useParams();
+  const API_BASE = import.meta.env.PROD ? 'https://eventmanagment-e3qo.onrender.com' : '';
 
   // Site Configuration & Content
   const [couple, setCouple] = useState(null);
@@ -54,7 +55,7 @@ export default function InvitationPage() {
 
   const fetchWeddingData = async () => {
     try {
-      const res = await fetch(`/api/public/wedding/${coupleSlug}`);
+      const res = await fetch(`${API_BASE}/api/public/wedding/${coupleSlug}`);
       if (res.ok) {
         const data = await res.json();
         setCouple(data.couple);
@@ -68,9 +69,10 @@ export default function InvitationPage() {
         const langObj = data.languages?.find(l => l.code === currentLang) || data.languages?.find(l => l.code === 'en');
         if (langObj) setT(langObj.strings || {});
 
-        // Fetch guest photo status if logged in
+        // Fetch guest profile & RSVP details if logged in
         if (guestToken) {
           fetchGuestPhotos(data.couple.id);
+          fetchGuestRsvpDetails();
         }
       } else {
         setError('Invitation website details could not be found.');
@@ -82,9 +84,32 @@ export default function InvitationPage() {
     }
   };
 
+  const fetchGuestRsvpDetails = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/guest/rsvp-status`, {
+        headers: { 'Authorization': `Bearer ${guestToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.guest) {
+          setGuestUser(data.guest);
+          if (data.guest.rsvpStatus && Object.keys(data.guest.rsvpStatus).length > 0) {
+            setRsvpAnswers(data.guest.rsvpStatus || {});
+            setRsvpSuccess('You have already submitted your RSVP response. Thank you!');
+          }
+          if (data.guest.customFieldValues) {
+            setCustomFieldAnswers(data.guest.customFieldValues || {});
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching guest RSVP status:', err);
+    }
+  };
+
   const fetchGuestPhotos = async (coupleId) => {
     try {
-      const res = await fetch('/api/guest/photos', {
+      const res = await fetch(`${API_BASE}/api/guest/photos`, {
         headers: { 'Authorization': `Bearer ${guestToken}` }
       });
       if (res.ok) {
@@ -139,7 +164,7 @@ export default function InvitationPage() {
     setOtpError('');
     setOtpLoading(true);
     try {
-      const res = await fetch('/api/auth/otp/request', {
+      const res = await fetch(`${API_BASE}/api/auth/otp/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobile, coupleSlug })
@@ -164,7 +189,7 @@ export default function InvitationPage() {
     setOtpError('');
     setOtpLoading(true);
     try {
-      const res = await fetch('/api/auth/otp/verify', {
+      const res = await fetch(`${API_BASE}/api/auth/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobile, otp, name: guestName })
@@ -206,7 +231,7 @@ export default function InvitationPage() {
     setRsvpSuccess('');
 
     try {
-      const res = await fetch('/api/guest/rsvp', {
+      const res = await fetch(`${API_BASE}/api/guest/rsvp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -243,7 +268,7 @@ export default function InvitationPage() {
     if (!wishName || !wishMsg) return;
 
     try {
-      const res = await fetch(`/api/public/wedding/${coupleSlug}/wish`, {
+      const res = await fetch(`${API_BASE}/api/public/wedding/${coupleSlug}/wish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guestName: wishName, message: wishMsg })
@@ -263,7 +288,7 @@ export default function InvitationPage() {
   // Guest photo request trigger
   const handleRequestPhotoAccess = async () => {
     try {
-      const res = await fetch('/api/guest/photo-request', {
+      const res = await fetch(`${API_BASE}/api/guest/photo-request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -639,82 +664,87 @@ export default function InvitationPage() {
                       <h4 className="text-md font-bold text-wedding-dark">{guestUser?.name}</h4>
                     </div>
 
-                    {/* RSVP choices per event */}
-                    {events.map((evt) => (
-                      <div key={evt.id} className="border-b border-wedding-gold/10 pb-4 space-y-2">
-                        <label className="block text-xs font-bold text-wedding-dark">{evt.title}</label>
-                        <div className="flex gap-4">
-                          <button 
-                            type="button"
-                            onClick={() => handleSelectRsvp(evt.id, 'Yes')}
-                            className={`flex-1 py-2 text-xs font-semibold border rounded-xl transition-all ${
-                              rsvpAnswers[evt.id] === 'Yes' 
-                                ? 'bg-wedding-brown border-wedding-brown text-wedding-cream shadow-sm' 
-                                : 'bg-white border-wedding-brown/20 text-wedding-brown hover:bg-wedding-beige/10'
-                            }`}
-                          >
-                            Attending
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => handleSelectRsvp(evt.id, 'No')}
-                            className={`flex-1 py-2 text-xs font-semibold border rounded-xl transition-all ${
-                              rsvpAnswers[evt.id] === 'No' 
-                                ? 'bg-wedding-brown border-wedding-brown text-wedding-cream shadow-sm' 
-                                : 'bg-white border-wedding-brown/20 text-wedding-brown hover:bg-wedding-beige/10'
-                            }`}
-                          >
-                            Declined
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                    {/* RSVP choices and fields - Hidden once responded */}
+                    {!rsvpSuccess ? (
+                      <>
+                        {/* RSVP choices per event */}
+                        {events.map((evt) => (
+                          <div key={evt.id} className="border-b border-wedding-gold/10 pb-4 space-y-2">
+                            <label className="block text-xs font-bold text-wedding-dark">{evt.title}</label>
+                            <div className="flex gap-4">
+                              <button 
+                                type="button"
+                                onClick={() => handleSelectRsvp(evt.id, 'Yes')}
+                                className={`flex-1 py-2 text-xs font-semibold border rounded-xl transition-all ${
+                                  rsvpAnswers[evt.id] === 'Yes' 
+                                    ? 'bg-wedding-brown border-wedding-brown text-wedding-cream shadow-sm' 
+                                    : 'bg-white border-wedding-brown/20 text-wedding-brown hover:bg-wedding-beige/10'
+                                }`}
+                              >
+                                Attending
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => handleSelectRsvp(evt.id, 'No')}
+                                className={`flex-1 py-2 text-xs font-semibold border rounded-xl transition-all ${
+                                  rsvpAnswers[evt.id] === 'No' 
+                                    ? 'bg-wedding-brown border-wedding-brown text-wedding-cream shadow-sm' 
+                                    : 'bg-white border-wedding-brown/20 text-wedding-brown hover:bg-wedding-beige/10'
+                                }`}
+                              >
+                                Declined
+                              </button>
+                            </div>
+                          </div>
+                        ))}
 
-                    {/* DYNAMIC CUSTOM RSVP FIELDS */}
-                    {customFields.map((field) => (
-                      <div key={field.id} className="space-y-1.5">
-                        <label className="block text-xs font-bold text-wedding-dark">
-                          {field.label}
-                          {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                        </label>
+                        {/* DYNAMIC CUSTOM RSVP FIELDS */}
+                        {customFields.map((field) => (
+                          <div key={field.id} className="space-y-1.5">
+                            <label className="block text-xs font-bold text-wedding-dark">
+                              {field.label}
+                              {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                            </label>
 
-                        {field.type === 'dropdown' ? (
-                          <select 
-                            required={field.required}
-                            value={customFieldAnswers[field.id] || ''}
-                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
-                            className="wedding-input py-2 text-xs"
-                          >
-                            <option value="">Select option</option>
-                            {field.options?.map((opt, idx) => (
-                              <option key={idx} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        ) : field.type === 'checkbox' ? (
-                          <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-wedding-dark">
-                            <input 
-                              type="checkbox" 
-                              checked={!!customFieldAnswers[field.id]}
-                              onChange={(e) => handleCustomFieldChange(field.id, e.target.checked)}
-                              className="accent-wedding-brown h-4.5 w-4.5"
-                            />
-                            Confirm selection
-                          </label>
-                        ) : (
-                          <input 
-                            type={field.type}
-                            required={field.required}
-                            value={customFieldAnswers[field.id] || ''}
-                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
-                            className="wedding-input py-2 text-xs"
-                          />
-                        )}
-                      </div>
-                    ))}
+                            {field.type === 'dropdown' ? (
+                              <select 
+                                required={field.required}
+                                value={customFieldAnswers[field.id] || ''}
+                                onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                                className="wedding-input py-2 text-xs"
+                              >
+                                <option value="">Select option</option>
+                                {field.options?.map((opt, idx) => (
+                                  <option key={idx} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : field.type === 'checkbox' ? (
+                              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-wedding-dark">
+                                <input 
+                                  type="checkbox" 
+                                  checked={!!customFieldAnswers[field.id]}
+                                  onChange={(e) => handleCustomFieldChange(field.id, e.target.checked)}
+                                  className="accent-wedding-brown h-4.5 w-4.5"
+                                />
+                                Confirm selection
+                              </label>
+                            ) : (
+                              <input 
+                                type={field.type}
+                                required={field.required}
+                                value={customFieldAnswers[field.id] || ''}
+                                onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                                className="wedding-input py-2 text-xs"
+                              />
+                            )}
+                          </div>
+                        ))}
 
-                    <button type="submit" className="gold-button w-full mt-4">
-                      {t.submit_rsvp || "Submit RSVP"}
-                    </button>
+                        <button type="submit" className="gold-button w-full mt-4">
+                          {t.submit_rsvp || "Submit RSVP"}
+                        </button>
+                      </>
+                    ) : null}
 
                     {/* QR Code and check in */}
                     <div className="border-t border-wedding-gold/15 pt-6 mt-6 flex flex-col items-center">

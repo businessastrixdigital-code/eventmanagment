@@ -35,6 +35,8 @@ export const AuthProvider = ({ children }) => {
     }
   }, [subRole]);
 
+  const API_BASE = import.meta.env.PROD ? 'https://eventmanagment-e3qo.onrender.com' : '';
+
   const apiRequest = async (url, options = {}) => {
     const headers = {
       'Content-Type': 'application/json',
@@ -42,7 +44,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     try {
-      const response = await fetch(url, { ...options, headers });
+      const response = await fetch(`${API_BASE}${url}`, { ...options, headers });
       
       if (response.status === 401) {
         const data = await response.json().catch(() => ({}));
@@ -114,7 +116,7 @@ export const AuthProvider = ({ children }) => {
         body = JSON.stringify({ username, password, subRole: coupleSubRole });
       }
 
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE}${url}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body
@@ -144,7 +146,7 @@ export const AuthProvider = ({ children }) => {
 
   const otpRequest = async (mobile, coupleSlug) => {
     try {
-      const response = await fetch('/api/auth/otp/request', {
+      const response = await fetch(`${API_BASE}/api/auth/otp/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobile, coupleSlug })
@@ -161,7 +163,7 @@ export const AuthProvider = ({ children }) => {
 
   const otpVerify = async (mobile, otp, name) => {
     try {
-      const response = await fetch('/api/auth/otp/verify', {
+      const response = await fetch(`${API_BASE}/api/auth/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobile, otp, name })
@@ -184,7 +186,7 @@ export const AuthProvider = ({ children }) => {
 
   const resetPassword = async (newPassword, tempToken) => {
     try {
-      const response = await fetch('/api/auth/reset-password', {
+      const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

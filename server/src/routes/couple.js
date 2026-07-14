@@ -705,8 +705,14 @@ router.get('/whatsapp-url/:id', verifyCouplePermission('sendNotifications'), asy
 
     const event = notification.eventId ? await db.Event.findByPk(notification.eventId) : null;
 
-    // Retrieve CLIENT_URL from environment (fallback to localhost:5173/5174 host where client runs)
-    const host = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/:\d+$/, ':5173') : 'http://localhost:5173';
+    // Dynamically resolve client domain based on the request's origin/referer headers, 
+    // ensuring live Vercel domains are automatically selected without hardcoding.
+    let host = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : '');
+    
+    if (!host) {
+      host = process.env.CLIENT_URL || 'http://localhost:5173';
+    }
+    
     const loginUrl = `${host}/invite/${couple.slug}`;
     const locationLink = event && event.mapsLink ? event.mapsLink : '';
 
