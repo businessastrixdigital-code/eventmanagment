@@ -1,0 +1,21 @@
+ALTER TABLE `AuditLogs` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `AuditLogs` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `Couples` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `Couples` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `CustomFields` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `CustomFields` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `Events` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `Events` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `Guests` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `Guests` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `Languages` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `Languages` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `Notifications` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `Notifications` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `PhotoAccessRequests` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `PhotoAccessRequests` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `Photos` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `Photos` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `SuperAdmins` ADD `createdAt` text;--> statement-breakpoint
+ALTER TABLE `SuperAdmins` ADD `updatedAt` text;--> statement-breakpoint
+ALTER TABLE `Wishes` ADD `updatedAt` text;

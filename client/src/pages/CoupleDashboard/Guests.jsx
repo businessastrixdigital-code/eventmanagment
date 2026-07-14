@@ -35,6 +35,8 @@ export default function Guests() {
   const [group, setGroup] = useState('Friends');
   const [invitedEventIds, setInvitedEventIds] = useState([]);
   const [csvText, setCsvText] = useState('');
+  const [invitationType, setInvitationType] = useState('Sahjode');
+  const [invitationTypeFilter, setInvitationTypeFilter] = useState('');
 
   const fetchGuestsAndEvents = async () => {
     setLoading(true);
@@ -47,7 +49,7 @@ export default function Guests() {
       }
 
       // 2. Fetch Guests (paginated + search)
-      const guestsRes = await apiRequest(`/api/couple/guests?page=${page}&limit=20&search=${search}`);
+      const guestsRes = await apiRequest(`/api/couple/guests?page=${page}&limit=20&search=${search}&invitationType=${invitationTypeFilter}`);
       if (guestsRes.ok) {
         const guestsData = await guestsRes.json();
         setGuests(guestsData.guests || []);
@@ -65,7 +67,7 @@ export default function Guests() {
 
   useEffect(() => {
     fetchGuestsAndEvents();
-  }, [page, search]);
+  }, [page, search, invitationTypeFilter]);
 
   const handleAddGuest = async (e) => {
     e.preventDefault();
@@ -74,7 +76,7 @@ export default function Guests() {
     try {
       const res = await apiRequest('/api/couple/guests', {
         method: 'POST',
-        body: JSON.stringify({ name, mobile, email, side, group, inviteEvents: invitedEventIds })
+        body: JSON.stringify({ name, mobile, email, side, group, inviteEvents: invitedEventIds, invitationType })
       });
       if (res.ok) {
         setSuccess(`Guest "${name}" added!`);
@@ -86,6 +88,7 @@ export default function Guests() {
         setSide('Bride');
         setGroup('Friends');
         setInvitedEventIds([]);
+        setInvitationType('Sahjode');
         fetchGuestsAndEvents();
       } else {
         const data = await res.json();
@@ -110,6 +113,7 @@ export default function Guests() {
           side, 
           group, 
           inviteEvents: invitedEventIds,
+          invitationType,
           // Retain existing RSVPs unless changed
           rsvpStatus: editingGuest.rsvpStatus 
         })
@@ -203,6 +207,7 @@ export default function Guests() {
     setSide(guest.side);
     setGroup(guest.group);
     setInvitedEventIds(guest.inviteEvents || []);
+    setInvitationType(guest.invitationType || 'Sahjode');
     setIsEditOpen(true);
   };
 
@@ -273,16 +278,29 @@ export default function Guests() {
         </div>
       )}
 
-      {/* FILTER SEARCH BAR */}
-      <div className="wedding-card bg-white p-4 mb-8 flex gap-4 items-center">
-        <Search className="h-5 w-5 text-wedding-gold shrink-0" />
-        <input 
-          type="text" 
-          placeholder="Search guests by name..." 
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="border-none bg-transparent w-full focus:outline-none text-wedding-dark placeholder-wedding-brown/40"
-        />
+      {/* FILTER SEARCH BAR & DROPDOWN */}
+      <div className="flex flex-col md:flex-row gap-4 mb-8">
+        <div className="wedding-card bg-white p-4 flex-1 flex gap-4 items-center">
+          <Search className="h-5 w-5 text-wedding-gold shrink-0" />
+          <input 
+            type="text" 
+            placeholder="Search guests by name..." 
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="border-none bg-transparent w-full focus:outline-none text-wedding-dark placeholder-wedding-brown/40"
+          />
+        </div>
+        <div className="wedding-card bg-white p-4 flex items-center shrink-0 min-w-[200px]">
+          <select
+            value={invitationTypeFilter}
+            onChange={(e) => { setInvitationTypeFilter(e.target.value); setPage(1); }}
+            className="w-full bg-transparent border-none focus:outline-none text-sm font-semibold text-wedding-dark cursor-pointer"
+          >
+            <option value="">All Invitation Types</option>
+            <option value="Sahjode">Sahjode (Couple)</option>
+            <option value="Sarva">Sarva (Entire Family)</option>
+          </select>
+        </div>
       </div>
 
       {/* BULK CSV IMPORT MODAL */}
@@ -352,6 +370,13 @@ export default function Guests() {
                 <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Mobile number</label>
                 <input type="text" required value={mobile} onChange={(e) => setMobile(e.target.value)} className="wedding-input" placeholder="e.g. 9876543210" />
               </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Invitation Type</label>
+                <select value={invitationType} onChange={(e) => setInvitationType(e.target.value)} className="wedding-input" required>
+                  <option value="Sahjode">Sahjode (Couple)</option>
+                  <option value="Sarva">Sarva (Entire Family)</option>
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Wedding Side</label>
@@ -417,6 +442,13 @@ export default function Guests() {
                 <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Mobile number</label>
                 <input type="text" required value={mobile} onChange={(e) => setMobile(e.target.value)} className="wedding-input" />
               </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Invitation Type</label>
+                <select value={invitationType} onChange={(e) => setInvitationType(e.target.value)} className="wedding-input" required>
+                  <option value="Sahjode">Sahjode (Couple)</option>
+                  <option value="Sarva">Sarva (Entire Family)</option>
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Wedding Side</label>
@@ -473,6 +505,7 @@ export default function Guests() {
                 <tr>
                   <th className="px-6 py-4 text-left">Guest Name & Side</th>
                   <th className="px-6 py-4 text-left">Phone & Group</th>
+                  <th className="px-6 py-4 text-left">Invitation Type</th>
                   {/* Dynamic Event Columns for RSVP status */}
                   {events.map(evt => (
                     <th key={evt.id} className="px-4 py-4 text-center font-jost normal-case truncate max-w-[120px]" title={evt.title}>
@@ -485,7 +518,7 @@ export default function Guests() {
               <tbody className="divide-y divide-wedding-gold/10 bg-white text-sm">
                 {guests.length === 0 ? (
                   <tr>
-                    <td colSpan={4 + events.length} className="px-6 py-12 text-center text-wedding-brown/50 italic">
+                    <td colSpan={5 + events.length} className="px-6 py-12 text-center text-wedding-brown/50 italic">
                       No guests onboarded. Click "Add Guest" or import via CSV to start!
                     </td>
                   </tr>
@@ -503,6 +536,15 @@ export default function Guests() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <p className="font-mono text-xs text-wedding-brown/80">{g.mobile}</p>
                         <span className="text-[10px] text-wedding-brown/50 font-bold uppercase">{g.group}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-block text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                          g.invitationType === 'Sarva'
+                            ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        }`}>
+                          {g.invitationType || 'Sahjode'}
+                        </span>
                       </td>
 
                       {/* Render event columns status */}

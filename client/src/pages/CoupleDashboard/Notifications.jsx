@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import CoupleDashboardLayout from '../../components/CoupleDashboardLayout';
 import { useAuth } from '../../context/AuthContext';
-import { Plus, Trash2, X, Bell, MessageSquare, Send, Calendar, Users, HelpCircle } from 'lucide-react';
+import { Plus, Trash2, X, Bell, MessageSquare, Send, Calendar, Users, HelpCircle, FileText, Upload, Download, Eye } from 'lucide-react';
 
 export default function Notifications() {
-  const { apiRequest } = useAuth();
+  const { apiRequest, role } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [events, setEvents] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -23,6 +23,8 @@ export default function Notifications() {
   // Pending Actions (e.g. WhatsApp send list)
   const [activePendingNotification, setActivePendingNotification] = useState(null);
   const [waLinks, setWaLinks] = useState({}); // maps guestId to waMeUrl
+  const [couple, setCouple] = useState(null);
+  const [selectedGuests, setSelectedGuests] = useState({});
 
   const fetchData = async () => {
     setLoading(true);
@@ -43,6 +45,12 @@ export default function Notifications() {
       if (guestsRes.ok) {
         const data = await guestsRes.json();
         setGuests(data.guests || []);
+      }
+
+      const coupleRes = await apiRequest('/api/couple/profile');
+      if (coupleRes.ok) {
+        const data = await coupleRes.json();
+        setCouple(data);
       }
     } catch (err) {
       setError('Connection error.');
@@ -137,9 +145,74 @@ export default function Notifications() {
     return `${hours}:${minutes}:00`;
   };
 
+  const handleCardUpload = async (e, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      setError('Only PDF templates are allowed.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('card', file);
+
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/couple/invitation-cards/${type}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('wedding_token')}`
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(`${type === 'sahjode' ? 'Sahjode' : 'Sarva'} card template uploaded successfully!`);
+        fetchData();
+      } else {
+        setError(data.error || 'Failed to upload card template.');
+      }
+    } catch (err) {
+      setError('Network error uploading template.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCardDelete = async (type) => {
+    if (!confirm(`Are you sure you want to delete the ${type === 'sahjode' ? 'Sahjode' : 'Sarva'} invitation card template?`)) {
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const res = await apiRequest(`/api/couple/invitation-cards/${type}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(`${type === 'sahjode' ? 'Sahjode' : 'Sarva'} card template deleted.`);
+        fetchData();
+      } else {
+        setError(data.error || 'Failed to delete template.');
+      }
+    } catch (err) {
+      setError('Network error deleting template.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadWhatsAppLinks = async (notification) => {
-    setActivePendingNotification(notification);
-    setWaLinks({});
+    setError('');
+    setSuccess('');
 
     // Resolve guests invited to the event
     let targetGuests = guests.filter(g => {
@@ -153,6 +226,29 @@ export default function Notifications() {
       targetGuests = targetGuests.filter(g => g.inviteEvents && g.inviteEvents.includes(notification.eventId));
     }
 
+    // Validation Check: before showing modal or loading links, check if Sahjode or Sarva guests exist but the corresponding PDF is missing
+    const hasSahjodeGuest = targetGuests.some(g => (g.invitationType || 'Sahjode') === 'Sahjode');
+    const hasSarvaGuest = targetGuests.some(g => g.invitationType === 'Sarva');
+
+    if (hasSahjodeGuest && (!couple || !couple.sahjodeCardUrl)) {
+      setError('Sahjode Invitation Card has not been uploaded.');
+      return;
+    }
+    if (hasSarvaGuest && (!couple || !couple.sarvaCardUrl)) {
+      setError('Sarva Invitation Card has not been uploaded.');
+      return;
+    }
+
+    setActivePendingNotification(notification);
+    setWaLinks({});
+
+    // Initialize all target guests to checked (true)
+    const initialSelection = {};
+    targetGuests.forEach(g => {
+      initialSelection[g.id] = true;
+    });
+    setSelectedGuests(initialSelection);
+
     // Call API for each guest to generate wa.me link
     const links = {};
     for (const g of targetGuests) {
@@ -161,6 +257,9 @@ export default function Notifications() {
         if (res.ok) {
           const data = await res.json();
           links[g.id] = data.waMeUrl;
+        } else {
+          const data = await res.json();
+          setError(data.error || 'Failed to generate link for some guests.');
         }
       } catch (err) {
         console.error(err);
@@ -169,7 +268,7 @@ export default function Notifications() {
     setWaLinks(links);
   };
 
-  const handleSendAllWhatsApp = async () => {
+  const handleSendSelectedWhatsApp = async () => {
     if (!activePendingNotification) return;
 
     const targetGuests = guests
@@ -178,7 +277,8 @@ export default function Notifications() {
         if (activePendingNotification.recipients === 'groom-side') return g.side === 'Groom';
         return true;
       })
-      .filter(g => !activePendingNotification.eventId || (g.inviteEvents && g.inviteEvents.includes(activePendingNotification.eventId)));
+      .filter(g => !activePendingNotification.eventId || (g.inviteEvents && g.inviteEvents.includes(activePendingNotification.eventId)))
+      .filter(g => selectedGuests[g.id]);
 
     let openedCount = 0;
     targetGuests.forEach(g => {
@@ -190,7 +290,7 @@ export default function Notifications() {
     });
 
     if (openedCount === 0) {
-      alert("No WhatsApp links generated yet. Please wait a moment.");
+      alert("No selected WhatsApp links generated or none checked.");
       return;
     }
 
@@ -335,53 +435,83 @@ export default function Notifications() {
       )}
 
       {/* WHATSAPP CLICK-ACTION BROADCASTER MODAL */}
-      {activePendingNotification && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-wedding-cream p-8 rounded-3xl border border-wedding-gold/20 shadow-wedding max-w-lg w-full relative max-h-[85vh] overflow-y-auto">
-            <button onClick={() => setActivePendingNotification(null)} className="absolute top-4 right-4 text-wedding-brown/50 hover:text-wedding-brown">
-              <X className="h-5 w-5" />
-            </button>
-            <h3 className="text-xl font-bold text-wedding-dark font-jost mb-2">WhatsApp Queue Actions</h3>
-            <p className="text-xs text-wedding-brown/70 mb-4">
-              WhatsApp does not support background silent sending. Click "Send" below to open prefilled text in a new tab.
-            </p>
+      {activePendingNotification && (() => {
+        const totalResolvedGuests = guests
+          .filter(g => {
+            if (activePendingNotification.recipients === 'bride-side') return g.side === 'Bride';
+            if (activePendingNotification.recipients === 'groom-side') return g.side === 'Groom';
+            if (Array.isArray(activePendingNotification.recipients)) return activePendingNotification.recipients.includes(g.id);
+            return true;
+          })
+          .filter(g => !activePendingNotification.eventId || (g.inviteEvents && g.inviteEvents.includes(activePendingNotification.eventId)));
 
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-2xl flex flex-col items-center text-center gap-3">
-              <p className="text-xs text-green-800 font-semibold">
-                Tip: You can open WhatsApp links for all guests in this list at once! (Please allow browser pop-ups).
-              </p>
-              <button 
-                onClick={handleSendAllWhatsApp}
-                className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2.5 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 transform active:scale-95"
-              >
-                <Send className="h-4 w-4" />
-                Send All at Once (Open All Tabs)
+        const allChecked = totalResolvedGuests.length > 0 && totalResolvedGuests.every(g => selectedGuests[g.id]);
+        const handleToggleAll = () => {
+          const nextVal = !allChecked;
+          const nextSelection = {};
+          totalResolvedGuests.forEach(g => {
+            nextSelection[g.id] = nextVal;
+          });
+          setSelectedGuests(nextSelection);
+        };
+
+        return (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-wedding-cream p-8 rounded-3xl border border-wedding-gold/20 shadow-wedding max-w-lg w-full relative max-h-[85vh] overflow-y-auto animate-fade-in">
+              <button onClick={() => setActivePendingNotification(null)} className="absolute top-4 right-4 text-wedding-brown/50 hover:text-wedding-brown">
+                <X className="h-5 w-5" />
               </button>
-            </div>
+              <h3 className="text-xl font-bold text-wedding-dark font-jost mb-2">WhatsApp Queue Actions</h3>
+              <p className="text-xs text-wedding-brown/70 mb-4">
+                WhatsApp does not support background silent sending. Click "Send" below to open prefilled text in a new tab.
+              </p>
 
-            <div className="space-y-3">
-              {guests
-                .filter(g => {
-                  if (activePendingNotification.recipients === 'bride-side') return g.side === 'Bride';
-                  if (activePendingNotification.recipients === 'groom-side') return g.side === 'Groom';
-                  if (Array.isArray(activePendingNotification.recipients)) return activePendingNotification.recipients.includes(g.id);
-                  return true;
-                })
-                .filter(g => !activePendingNotification.eventId || (g.inviteEvents && g.inviteEvents.includes(activePendingNotification.eventId)))
-                .map(g => (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-2xl flex flex-col items-center text-center gap-3">
+                <p className="text-xs text-green-800 font-semibold">
+                  Tip: You can open WhatsApp links for selected guests at once! (Please allow browser pop-ups).
+                </p>
+                <button 
+                  onClick={handleSendSelectedWhatsApp}
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2.5 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 transform active:scale-95"
+                >
+                  <Send className="h-4 w-4" />
+                  Send Selected at Once (Open Selected Tabs)
+                </button>
+              </div>
+
+              {/* Select All Toggle */}
+              <div className="flex items-center gap-2 mb-4 px-1 border-b border-wedding-gold/10 pb-2">
+                <input 
+                  type="checkbox" 
+                  checked={allChecked} 
+                  onChange={handleToggleAll} 
+                  className="accent-green-600 h-4.5 w-4.5 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-wedding-dark cursor-pointer select-none" onClick={handleToggleAll}>
+                  Select All Recipients ({totalResolvedGuests.length})
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {totalResolvedGuests.map(g => (
                   <div key={g.id} className="flex justify-between items-center bg-white p-3.5 rounded-2xl border border-wedding-gold/5 shadow-sm">
-                    <div>
-                      <p className="text-sm font-semibold text-wedding-dark">{g.name}</p>
-                      <p className="text-xs text-wedding-brown/50 font-mono mt-0.5">{g.mobile}</p>
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="checkbox" 
+                        checked={!!selectedGuests[g.id]} 
+                        onChange={() => setSelectedGuests(prev => ({ ...prev, [g.id]: !prev[g.id] }))}
+                        className="accent-green-600 h-4.5 w-4.5 cursor-pointer"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-wedding-dark">{g.name}</p>
+                        <p className="text-xs text-wedding-brown/50 font-mono mt-0.5">{g.mobile}</p>
+                      </div>
                     </div>
                     {waLinks[g.id] ? (
                       <a 
                         href={waLinks[g.id]} 
                         target="_blank" 
                         rel="noreferrer"
-                        onClick={() => {
-                          // Optionally, we can save/mark as sent locally, but this is a deep link trigger
-                        }}
                         className="bg-green-500 hover:bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
                       >
                         <Send className="h-3 w-3" />
@@ -392,10 +522,168 @@ export default function Notifications() {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* INVITATION CARDS MANAGEMENT SECTION */}
+      <div className="wedding-card bg-white p-6 mb-8 relative overflow-hidden">
+        <div className="floral-corner-tl opacity-35"></div>
+        <h3 className="text-xl font-bold font-jost text-wedding-dark mb-2">Invitation Cards Templates</h3>
+        <p className="text-xs text-wedding-brown/70 mb-6">Upload separate PDF invitation cards for couples (Sahjode) and families (Sarva)</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Sahjode (Couple) Card */}
+          <div className="border border-wedding-gold/15 bg-wedding-beige/5 p-5 rounded-2xl flex flex-col justify-between">
+            <div>
+              <span className="inline-block text-[10px] font-bold tracking-widest uppercase bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full mb-3">
+                Sahjode (Couple)
+              </span>
+              <h4 className="text-sm font-semibold text-wedding-dark mb-1">Sahjode Invitation template</h4>
+              
+              {couple?.sahjodeCardUrl ? (
+                <div className="space-y-1.5 mt-2">
+                  <p className="text-xs text-green-700 font-semibold flex items-center gap-1">
+                    ✓ PDF Card Uploaded
+                  </p>
+                  <p className="text-[10px] text-wedding-brown/60">
+                    Uploaded By: <strong>{couple.sahjodeCardUploadedBy || 'Unknown'}</strong>
+                  </p>
+                  <p className="text-[10px] text-wedding-brown/60">
+                    Uploaded Date: <strong>{couple.sahjodeCardUploadedAt ? new Date(couple.sahjodeCardUploadedAt).toLocaleString() : 'N/A'}</strong>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-wedding-brown/50 italic mt-2">No card template uploaded.</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {couple?.sahjodeCardUrl && (
+                <>
+                  <a 
+                    href={couple.sahjodeCardUrl} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Preview
+                  </a>
+                  <a 
+                    href={couple.sahjodeCardUrl} 
+                    download={`sahjode_invitation_${couple.slug}.pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download
+                  </a>
+                </>
+              )}
+
+              {role !== 'superadmin' && (
+                <>
+                  <label className="gold-button text-xs py-1.5 px-3 flex items-center gap-1 cursor-pointer select-none">
+                    <Upload className="h-3.5 w-3.5" /> 
+                    {couple?.sahjodeCardUrl ? 'Replace' : 'Upload PDF'}
+                    <input 
+                      type="file" 
+                      accept=".pdf" 
+                      className="hidden" 
+                      onChange={(e) => handleCardUpload(e, 'sahjode')} 
+                    />
+                  </label>
+                  {couple?.sahjodeCardUrl && (
+                    <button 
+                      onClick={() => handleCardDelete('sahjode')} 
+                      className="p-1.5 hover:bg-red-50 text-red-600 rounded-xl transition-colors border border-red-100"
+                      title="Delete Template"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Sarva (Entire Family) Card */}
+          <div className="border border-wedding-gold/15 bg-wedding-beige/5 p-5 rounded-2xl flex flex-col justify-between">
+            <div>
+              <span className="inline-block text-[10px] font-bold tracking-widest uppercase bg-purple-50 text-purple-800 px-2.5 py-0.5 rounded-full mb-3">
+                Sarva (Family)
+              </span>
+              <h4 className="text-sm font-semibold text-wedding-dark mb-1">Sarva Invitation template</h4>
+              
+              {couple?.sarvaCardUrl ? (
+                <div className="space-y-1.5 mt-2">
+                  <p className="text-xs text-green-700 font-semibold flex items-center gap-1">
+                    ✓ PDF Card Uploaded
+                  </p>
+                  <p className="text-[10px] text-wedding-brown/60">
+                    Uploaded By: <strong>{couple.sarvaCardUploadedBy || 'Unknown'}</strong>
+                  </p>
+                  <p className="text-[10px] text-wedding-brown/60">
+                    Uploaded Date: <strong>{couple.sarvaCardUploadedAt ? new Date(couple.sarvaCardUploadedAt).toLocaleString() : 'N/A'}</strong>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-wedding-brown/50 italic mt-2">No card template uploaded.</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {couple?.sarvaCardUrl && (
+                <>
+                  <a 
+                    href={couple.sarvaCardUrl} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Preview
+                  </a>
+                  <a 
+                    href={couple.sarvaCardUrl} 
+                    download={`sarva_invitation_${couple.slug}.pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download
+                  </a>
+                </>
+              )}
+
+              {role !== 'superadmin' && (
+                <>
+                  <label className="gold-button text-xs py-1.5 px-3 flex items-center gap-1 cursor-pointer select-none">
+                    <Upload className="h-3.5 w-3.5" /> 
+                    {couple?.sarvaCardUrl ? 'Replace' : 'Upload PDF'}
+                    <input 
+                      type="file" 
+                      accept=".pdf" 
+                      className="hidden" 
+                      onChange={(e) => handleCardUpload(e, 'sarva')} 
+                    />
+                  </label>
+                  {couple?.sarvaCardUrl && (
+                    <button 
+                      onClick={() => handleCardDelete('sarva')} 
+                      className="p-1.5 hover:bg-red-50 text-red-600 rounded-xl transition-colors border border-red-100"
+                      title="Delete Template"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* QUEUE LISTING */}
       {loading ? (

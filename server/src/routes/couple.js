@@ -37,6 +37,31 @@ const handleUpload = (fieldname) => {
   };
 };
 
+const uploadPdf = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+  fileFilter: (req, file, cb) => {
+    const extname = path.extname(file.originalname).toLowerCase() === '.pdf';
+    const mimetype = file.mimetype === 'application/pdf';
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb(new Error('Only PDF files are allowed (.pdf)'));
+  }
+});
+
+const handlePdfUpload = (fieldname) => {
+  const single = uploadPdf.single(fieldname);
+  return (req, res, next) => {
+    single(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message });
+      }
+      next();
+    });
+  };
+};
+
 // Check auth and verify permissions for couple actions
 router.use(authenticate);
 
@@ -91,6 +116,115 @@ router.put('/profile', verifyCouplePermission('editEvents'), handleUpload('cover
     return res.json({ success: true, couple });
   } catch (err) {
     return res.status(500).json({ error: 'Failed to update profile.', details: err.message });
+  }
+});
+
+// 1.5. INVITATION CARDS TEMPLATES MANAGEMENT
+// POST /api/couple/invitation-cards/:type - Upload Sahjode or Sarva PDF card
+router.post('/invitation-cards/:type', verifyCouplePermission('sendNotifications'), async (req, res, next) => {
+  // Check that the actor is a couple role (Super Admin can view but not modify)
+  if (req.user.role === 'superadmin') {
+    return res.status(403).json({ error: 'Access denied. Super Admins cannot modify invitation templates.' });
+  }
+  next();
+}, handlePdfUpload('card'), async (req, res) => {
+  const { type } = req.params;
+  if (!['sahjode', 'sarva'].includes(type)) {
+    return res.status(400).json({ error: 'Invalid card type. Must be sahjode or sarva.' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'PDF file is required.' });
+  }
+
+  try {
+    const coupleId = req.user.id;
+    const couple = await db.Couple.findByPk(coupleId);
+    if (!couple) return res.status(404).json({ error: 'Couple profile not found.' });
+
+    const fieldPrefix = type === 'sahjode' ? 'sahjodeCard' : 'sarvaCard';
+    const oldPublicId = couple[`${fieldPrefix}PublicId`];
+
+    // Clean up old file if it existed first
+    if (oldPublicId) {
+      await deleteFromCloudinary(oldPublicId);
+    }
+
+    // Stream upload to Cloudinary using resourceType: 'image' to enable web previewing for PDFs
+    const { url, publicId } = await uploadBufferToCloudinary(req.file.buffer, `Functions/${coupleId}/Invitations`, 'image');
+
+    // Save to Couple model
+    couple[fieldPrefix] = url;
+    couple[`${fieldPrefix}Url`] = url;
+    couple[`${fieldPrefix}PublicId`] = publicId;
+    couple[`${fieldPrefix}UploadedBy`] = req.user.subRole === 'groom' ? 'Groom Family Admin' : 'Bride Family Admin';
+    couple[`${fieldPrefix}UploadedAt`] = new Date();
+
+    await couple.save();
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: `UPLOAD_${type.toUpperCase()}_CARD`,
+      targetId: coupleId,
+      reason: `${req.user.subRole === 'groom' ? 'Groom' : 'Bride'} Family Admin uploaded new ${type} card PDF.`
+    });
+
+    return res.json({
+      success: true,
+      card: {
+        url: couple[`${fieldPrefix}Url`],
+        uploadedBy: couple[`${fieldPrefix}UploadedBy`],
+        uploadedAt: couple[`${fieldPrefix}UploadedAt`]
+      }
+    });
+
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to upload card template.', details: err.message });
+  }
+});
+
+// DELETE /api/couple/invitation-cards/:type - Delete Sahjode or Sarva PDF card
+router.delete('/invitation-cards/:type', verifyCouplePermission('sendNotifications'), async (req, res) => {
+  if (req.user.role === 'superadmin') {
+    return res.status(403).json({ error: 'Access denied. Super Admins cannot modify invitation templates.' });
+  }
+
+  const { type } = req.params;
+  if (!['sahjode', 'sarva'].includes(type)) {
+    return res.status(400).json({ error: 'Invalid card type. Must be sahjode or sarva.' });
+  }
+
+  try {
+    const coupleId = req.user.id;
+    const couple = await db.Couple.findByPk(coupleId);
+    if (!couple) return res.status(404).json({ error: 'Couple profile not found.' });
+
+    const fieldPrefix = type === 'sahjode' ? 'sahjodeCard' : 'sarvaCard';
+    const oldPublicId = couple[`${fieldPrefix}PublicId`];
+
+    if (oldPublicId) {
+      await deleteFromCloudinary(oldPublicId);
+    }
+
+    couple[fieldPrefix] = null;
+    couple[`${fieldPrefix}Url`] = null;
+    couple[`${fieldPrefix}PublicId`] = null;
+    couple[`${fieldPrefix}UploadedBy`] = null;
+    couple[`${fieldPrefix}UploadedAt`] = null;
+
+    await couple.save();
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: `DELETE_${type.toUpperCase()}_CARD`,
+      targetId: coupleId,
+      reason: `${req.user.subRole === 'groom' ? 'Groom' : 'Bride'} Family Admin deleted ${type} card PDF.`
+    });
+
+    return res.json({ success: true, message: `${type === 'sahjode' ? 'Sahjode' : 'Sarva'} card template deleted.` });
+
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to delete card template.', details: err.message });
   }
 });
 
@@ -220,11 +354,15 @@ router.get('/guests', async (req, res) => {
     const limit = parseInt(req.query.limit) || 25;
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
+    const invitationType = req.query.invitationType || '';
 
     let whereCondition = { coupleId: req.user.id };
     if (search) {
       const { Op } = db.Sequelize;
       whereCondition.name = { [Op.like]: `%${search}%` };
+    }
+    if (invitationType && ['Sahjode', 'Sarva'].includes(invitationType)) {
+      whereCondition.invitationType = invitationType;
     }
 
     const { count, rows } = await db.Guest.findAndCountAll({
@@ -248,10 +386,14 @@ router.get('/guests', async (req, res) => {
 // POST /api/couple/guests - Add manual guest
 router.post('/guests', verifyCouplePermission('manageGuests'), async (req, res) => {
   try {
-    const { name, mobile, email, side, group, inviteEvents } = req.body;
+    const { name, mobile, email, side, group, inviteEvents, invitationType } = req.body;
 
-    if (!name || !mobile) {
-      return res.status(400).json({ error: 'Guest name and mobile number are required.' });
+    if (!name || !mobile || !invitationType) {
+      return res.status(400).json({ error: 'Guest name, mobile number, and invitation type are required.' });
+    }
+
+    if (!['Sahjode', 'Sarva'].includes(invitationType)) {
+      return res.status(400).json({ error: 'Invalid invitation type. Must be Sahjode or Sarva.' });
     }
 
     const guest = await db.Guest.create({
@@ -262,6 +404,7 @@ router.post('/guests', verifyCouplePermission('manageGuests'), async (req, res) 
       side: side || 'Bride',
       group: group || 'Other',
       inviteEvents: inviteEvents || [],
+      invitationType,
       rsvpStatus: {} // Initially empty RSVP status
     });
 
@@ -277,7 +420,7 @@ router.put('/guests/:id', verifyCouplePermission('manageGuests'), async (req, re
     const guest = await db.Guest.findOne({ where: { id: req.params.id, coupleId: req.user.id } });
     if (!guest) return res.status(404).json({ error: 'Guest not found.' });
 
-    const { name, mobile, email, side, group, inviteEvents, rsvpStatus, customFieldValues } = req.body;
+    const { name, mobile, email, side, group, inviteEvents, rsvpStatus, customFieldValues, invitationType } = req.body;
 
     if (name) guest.name = name;
     if (mobile) guest.mobile = mobile;
@@ -287,6 +430,12 @@ router.put('/guests/:id', verifyCouplePermission('manageGuests'), async (req, re
     if (inviteEvents) guest.inviteEvents = inviteEvents;
     if (rsvpStatus) guest.rsvpStatus = rsvpStatus;
     if (customFieldValues) guest.customFieldValues = customFieldValues;
+    if (invitationType) {
+      if (!['Sahjode', 'Sarva'].includes(invitationType)) {
+        return res.status(400).json({ error: 'Invalid invitation type. Must be Sahjode or Sarva.' });
+      }
+      guest.invitationType = invitationType;
+    }
 
     await guest.save();
     return res.json(guest);
@@ -329,6 +478,7 @@ router.post('/guests/bulk', verifyCouplePermission('manageGuests'), async (req, 
     const emailIndex = headers.indexOf('email');
     const sideIndex = headers.indexOf('side');
     const groupIndex = headers.indexOf('group');
+    const invitationTypeIndex = headers.indexOf('invitationtype') !== -1 ? headers.indexOf('invitationtype') : headers.indexOf('invitation type');
 
     let createdCount = 0;
     let skippedCount = 0;
@@ -349,6 +499,9 @@ router.post('/guests/bulk', verifyCouplePermission('manageGuests'), async (req, 
       const sideRaw = sideIndex !== -1 ? cols[sideIndex] : 'Bride';
       const side = (sideRaw.toLowerCase() === 'groom' || sideRaw.toLowerCase() === 'groom side') ? 'Groom' : 'Bride';
       const group = groupIndex !== -1 ? cols[groupIndex] : 'Other';
+      
+      const invitationTypeRaw = invitationTypeIndex !== -1 ? cols[invitationTypeIndex] : 'Sahjode';
+      const invitationType = (invitationTypeRaw && invitationTypeRaw.trim().toLowerCase() === 'sarva') ? 'Sarva' : 'Sahjode';
 
       // Deduplicate: check if this couple already has this mobile
       const existing = await db.Guest.findOne({
@@ -368,6 +521,7 @@ router.post('/guests/bulk', verifyCouplePermission('manageGuests'), async (req, 
         side,
         group,
         inviteEvents: [],
+        invitationType,
         rsvpStatus: {}
       });
 
@@ -532,24 +686,71 @@ router.get('/whatsapp-url/:id', verifyCouplePermission('sendNotifications'), asy
     const guest = await db.Guest.findByPk(guestId);
     if (!guest) return res.status(404).json({ error: 'Guest not found.' });
 
+    const couple = await db.Couple.findByPk(req.user.id);
+    if (!couple) return res.status(404).json({ error: 'Couple profile not found.' });
+
+    // Validate if the correct PDF exists
+    const invType = guest.invitationType || 'Sahjode';
+    const sahjodeCard = couple.sahjodeCard || couple.sahjodeCardUrl;
+    const sarvaCard = couple.sarvaCard || couple.sarvaCardUrl;
+
+    if (invType === 'Sahjode' && !sahjodeCard) {
+      return res.status(400).json({ error: 'Sahjode Invitation Card has not been uploaded.' });
+    }
+    if (invType === 'Sarva' && !sarvaCard) {
+      return res.status(400).json({ error: 'Sarva Invitation Card has not been uploaded.' });
+    }
+
+    const cardUrl = invType === 'Sarva' ? sarvaCard : sahjodeCard;
+
     const event = notification.eventId ? await db.Event.findByPk(notification.eventId) : null;
+
+    // Retrieve CLIENT_URL from environment (fallback to localhost:5173/5174 host where client runs)
+    const host = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/:\d+$/, ':5173') : 'http://localhost:5173';
+    const loginUrl = `${host}/invite/${couple.slug}`;
+    const locationLink = event && event.mapsLink ? event.mapsLink : '';
 
     const data = {
       guestName: guest.name,
       eventName: event ? event.title : 'Wedding Celebration',
       venue: event ? event.venue : '',
       time: event ? event.time : '',
-      date: event ? event.date : ''
+      date: event ? event.date : '',
+      cardUrl: cardUrl,
+      locationLink: locationLink,
+      loginUrl: loginUrl
     };
 
-    // Helper function import/usage (defined locally for now)
+    // Helper function import/usage
     const compileTemplate = (template, data) => {
-      return template
+      let msg = template
         .replace(/{guestName}/g, data.guestName || '')
         .replace(/{eventName}/g, data.eventName || '')
         .replace(/{venue}/g, data.venue || '')
         .replace(/{time}/g, data.time || '')
         .replace(/{date}/g, data.date || '');
+
+      // Handle location / maps link placeholder
+      if (msg.includes('{location}')) {
+        msg = msg.replace(/{location}/g, data.locationLink || data.venue || '');
+      } else if (data.locationLink) {
+        msg = `${msg}\n\nVenue Location Map: ${data.locationLink}`;
+      }
+
+      // Handle login / wedding site URL placeholder
+      if (msg.includes('{loginUrl}')) {
+        msg = msg.replace(/{loginUrl}/g, data.loginUrl || '');
+      } else {
+        msg = `${msg}\n\nRSVP & Wedding Details: ${data.loginUrl}`;
+      }
+
+      // Handle PDF Card URL
+      if (msg.includes('{cardUrl}')) {
+        msg = msg.replace(/{cardUrl}/g, data.cardUrl || '');
+      } else if (data.cardUrl) {
+        msg = `${msg}\n\nInvitation Card: ${data.cardUrl}`;
+      }
+      return msg;
     };
 
     const message = compileTemplate(notification.template, data);

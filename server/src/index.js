@@ -281,3 +281,22 @@ db.sequelize.sync({ force: false }).then(async () => {
 }).catch(err => {
   console.error('[DATABASE ERROR] Failed to initialize Postgres database:', err);
 });
+
+// Graceful shutdown to release port 3000 on nodemon restart/exit
+const gracefulShutdown = () => {
+  console.log('[SERVER] Shutting down gracefully...');
+  server.close(() => {
+    console.log('[SERVER] HTTP server closed.');
+    process.exit(0);
+  });
+
+  setTimeout(() => {
+    console.log('[SERVER] Forced exit.');
+    process.exit(0);
+  }, 500);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGUSR2', gracefulShutdown);
+

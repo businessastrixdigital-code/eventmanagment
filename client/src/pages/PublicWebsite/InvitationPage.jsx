@@ -322,8 +322,19 @@ export default function InvitationPage() {
     card: couple?.themeConfig?.colors?.card || '#FBF7F0'
   };
 
+  const defaultSectionsList = [
+    { id: 'hero', name: 'Hero Cover & Timer', visible: true },
+    { id: 'story', name: 'Our Story Bio', visible: true },
+    { id: 'timeline', name: 'Events Timeline', visible: true },
+    { id: 'gallery', name: 'Photo Gallery', visible: true },
+    { id: 'rsvp', name: 'RSVP Access Portal', visible: true },
+    { id: 'wishes', name: 'Wishes Wall', visible: true }
+  ];
+
   // Compile section display lists based on settings sorting
-  const sectionsList = couple?.themeConfig?.sections?.filter(s => s.visible) || [];
+  const sectionsList = couple?.themeConfig?.sections && couple.themeConfig.sections.length > 0
+    ? couple.themeConfig.sections.filter(s => s.visible)
+    : defaultSectionsList;
 
   return (
     <div style={{ backgroundColor: themeStyles.background }} className="min-h-screen relative font-poppins selection:bg-wedding-gold/20">

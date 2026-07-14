@@ -102,10 +102,22 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password, roleType, coupleSubRole = 'bride') => {
     try {
-      const response = await fetch('/api/auth/login', {
+      let url, body;
+
+      if (roleType === 'superadmin') {
+        // Super Admin uses a separate, isolated login endpoint
+        url = '/api/auth/admin/login';
+        body = JSON.stringify({ email: username, password });
+      } else {
+        // Couple login
+        url = '/api/auth/login';
+        body = JSON.stringify({ username, password, subRole: coupleSubRole });
+      }
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role: roleType, subRole: coupleSubRole })
+        body
       });
 
       const data = await response.json();

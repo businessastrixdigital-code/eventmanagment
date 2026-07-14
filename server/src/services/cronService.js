@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import db from '../models/index.js';
-import { Op } from 'sequelize';
+import { Op } from '../models/index.js';
 
 // Note: this app is WhatsApp-only for guest notifications — there is no email or
 // SMS provider configured, and none should be added. Every notification is routed

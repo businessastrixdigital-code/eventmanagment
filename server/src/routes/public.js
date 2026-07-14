@@ -8,7 +8,20 @@ router.get('/wedding/:slug', async (req, res) => {
   try {
     const couple = await db.Couple.findOne({
       where: { slug: req.params.slug },
-      attributes: { exclude: ['passwordHash', 'mobile'] } // omit credentials and contact
+      attributes: { 
+        exclude: [
+          'passwordHash', 
+          'mobile',
+          'sahjodeCardUrl',
+          'sahjodeCardPublicId',
+          'sahjodeCardUploadedBy',
+          'sahjodeCardUploadedAt',
+          'sarvaCardUrl',
+          'sarvaCardPublicId',
+          'sarvaCardUploadedBy',
+          'sarvaCardUploadedAt'
+        ] 
+      } // omit credentials, contact, and invitation card templates
     });
 
     if (!couple) {

@@ -618,6 +618,53 @@ export default function CoupleManagement() {
                   </div>
                 )}
               </div>
+              {/* Invitation Card Templates */}
+              <div>
+                <h4 className="font-bold text-sm text-wedding-dark uppercase tracking-wider mb-2">Invitation Templates</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white p-4 rounded-xl border border-wedding-gold/10 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">Sahjode Card</span>
+                      {selectedCoupleDetail.sahjodeCardUrl ? (
+                        <div className="mt-2 text-xs text-wedding-brown/75">
+                          <p>Uploaded by: <strong>{selectedCoupleDetail.sahjodeCardUploadedBy || 'Unknown'}</strong></p>
+                          <p className="mt-0.5">Date: <strong>{selectedCoupleDetail.sahjodeCardUploadedAt ? new Date(selectedCoupleDetail.sahjodeCardUploadedAt).toLocaleDateString() : 'N/A'}</strong></p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-wedding-brown/50 italic mt-2">Not Uploaded</p>
+                      )}
+                    </div>
+                    {selectedCoupleDetail.sahjodeCardUrl && (
+                      <div className="mt-3 flex gap-2">
+                        <a href={selectedCoupleDetail.sahjodeCardUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-wedding-gold hover:underline">
+                          View PDF
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-wedding-gold/10 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-purple-800 bg-purple-50 px-2 py-0.5 rounded">Sarva Card</span>
+                      {selectedCoupleDetail.sarvaCardUrl ? (
+                        <div className="mt-2 text-xs text-wedding-brown/75">
+                          <p>Uploaded by: <strong>{selectedCoupleDetail.sarvaCardUploadedBy || 'Unknown'}</strong></p>
+                          <p className="mt-0.5">Date: <strong>{selectedCoupleDetail.sarvaCardUploadedAt ? new Date(selectedCoupleDetail.sarvaCardUploadedAt).toLocaleDateString() : 'N/A'}</strong></p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-wedding-brown/50 italic mt-2">Not Uploaded</p>
+                      )}
+                    </div>
+                    {selectedCoupleDetail.sarvaCardUrl && (
+                      <div className="mt-3 flex gap-2">
+                        <a href={selectedCoupleDetail.sarvaCardUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-wedding-gold hover:underline">
+                          View PDF
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-white p-3 rounded-lg border border-wedding-gold/5">

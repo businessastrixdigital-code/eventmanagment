@@ -14,10 +14,10 @@ cloudinary.config({
  * Uploads an in-memory file buffer (from multer's memoryStorage) to Cloudinary.
  * Returns { url, publicId } — store both on the model so deletion works later.
  */
-export function uploadBufferToCloudinary(buffer, folder = 'mms') {
+export function uploadBufferToCloudinary(buffer, folder = 'mms', resourceType = 'image') {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'image' },
+      { folder, resource_type: resourceType },
       (error, result) => {
         if (error) return reject(error);
         resolve({ url: result.secure_url, publicId: result.public_id });

@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { Heart, UserCheck, Sparkles } from 'lucide-react';
-import { flushSync } from 'react-dom';
 
 export default function Login() {
-  const { login, resetPassword } = useAuth();
+  const { login, resetPassword, token, role: authRole, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // Tabs: 'couple' | 'superadmin'
@@ -24,6 +23,15 @@ export default function Login() {
   const [tempToken, setTempToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
+  // Redirect if already logged in (placed after all hooks)
+  if (!authLoading && token && authRole) {
+    if (authRole === 'superadmin') {
+      return <Navigate to="/super-admin" replace />;
+    } else if (authRole === 'couple') {
+      return <Navigate to="/dashboard" replace />;
+    }
+  }
+
   const handleCoupleOrAdminLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -36,15 +44,10 @@ export default function Login() {
         setMustReset(true);
         setTempToken(result.tempToken);
         setSuccess('First login detected! Please set a new secure password.');
-      } else {
-        flushSync(() => {
-          if (role === 'superadmin') {
-            navigate('/super-admin');
-          } else {
-            navigate('/dashboard');
-          }
-        });
       }
+      // Navigation is handled by the redirect guard above —
+      // once login() updates token + role in AuthContext,
+      // the component re-renders and the guard fires.
     } catch (err) {
       setError(err.message || 'Login failed.');
     } finally {

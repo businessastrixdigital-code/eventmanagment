@@ -21,17 +21,39 @@ export default function WebsiteEditor() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [previewMode, setPreviewMode] = useState('desktop'); // 'desktop' | 'mobile'
+  const [coverPhoto, setCoverPhoto] = useState('');
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const defaultSections = [
+    { id: 'hero', name: 'Hero Cover & Timer', visible: true },
+    { id: 'story', name: 'Our Story Bio', visible: true },
+    { id: 'timeline', name: 'Events Timeline', visible: true },
+    { id: 'gallery', name: 'Photo Gallery', visible: true },
+    { id: 'rsvp', name: 'RSVP Access Portal', visible: true },
+    { id: 'wishes', name: 'Wishes Wall', visible: true }
+  ];
+
+  const defaultColors = {
+    background: '#F5EFE6',
+    primary: '#6B4423',
+    heading: '#4A2C17',
+    accent: '#C9A66B',
+    card: '#FBF7F0'
+  };
 
   const fetchConfig = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest(`/api/superadmin/couples/${user.id}`);
+      const res = await apiRequest('/api/couple/profile');
       if (res.ok) {
         const data = await res.json();
         const config = data.themeConfig || {};
-        setSections(config.sections || []);
-        setColors(config.colors || {});
+        
+        // Initialize with defaults if values are missing
+        setSections(config.sections && config.sections.length > 0 ? config.sections : defaultSections);
+        setColors(config.colors && Object.keys(config.colors).length > 0 ? config.colors : defaultColors);
         setActiveTemplate(config.activeTemplate || 'classic');
+        setCoverPhoto(data.coverPhoto || '');
       } else {
         setError('Failed to fetch theme configuration.');
       }
@@ -39,6 +61,43 @@ export default function WebsiteEditor() {
       setError('Connection error.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCoverUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('coverPhoto', file);
+
+    setError('');
+    setSuccess('');
+    setUploadingCover(true);
+
+    try {
+      const res = await fetch('/api/couple/profile', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('wedding_token')}`
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCoverPhoto(data.couple.coverPhoto);
+        setSuccess('Cover photo updated successfully! The live preview is refreshed.');
+        
+        // Force refresh iframe preview
+        const iframe = document.querySelector('iframe');
+        if (iframe) iframe.src = iframe.src;
+      } else {
+        setError(data.error || 'Failed to upload cover photo.');
+      }
+    } catch (err) {
+      setError('Network error uploading cover photo.');
+    } finally {
+      setUploadingCover(false);
     }
   };
 
@@ -129,6 +188,33 @@ export default function WebsiteEditor() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Design Controls Column */}
           <div className="lg:col-span-4 space-y-6">
+            {/* Cover Photo Customization */}
+            <div className="wedding-card bg-white">
+              <h3 className="text-md font-bold font-jost text-wedding-dark mb-3">Cover Background Image</h3>
+              {coverPhoto ? (
+                <div className="relative rounded-2xl overflow-hidden h-32 mb-3 border border-wedding-gold/10">
+                  <img src={coverPhoto} alt="Cover Preview" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/20"></div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border-2 border-dashed border-wedding-gold/20 p-6 text-center text-xs text-wedding-brown/40 mb-3 italic">
+                  No cover photo selected. Upload one to serve as your wedding banner!
+                </div>
+              )}
+              <div className="relative">
+                <input 
+                  type="file" 
+                  id="cover-photo-input"
+                  accept="image/*" 
+                  onChange={handleCoverUpload}
+                  disabled={uploadingCover}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                />
+                <button type="button" className="gold-button w-full text-xs py-2 block text-center pointer-events-none" disabled={uploadingCover}>
+                  {uploadingCover ? 'Uploading Banner...' : 'Choose Banner Image'}
+                </button>
+              </div>
+            </div>
             {/* Color Palette customization */}
             <div className="wedding-card bg-white">
               <h3 className="text-md font-bold font-jost text-wedding-dark mb-4">Color Palette</h3>

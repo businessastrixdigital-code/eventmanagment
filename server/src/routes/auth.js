@@ -19,93 +19,109 @@ const generateToken = (payload, expires = '24h') => {
   return token;
 };
 
-// POST /api/auth/login - Role-aware login
-router.post('/login', async (req, res) => {
-  const { username, password, role } = req.body;
+// POST /api/auth/admin/login - Super Admin login (isolated route)
+router.post('/admin/login', async (req, res) => {
+  const { email, password } = req.body;
 
-  if (!username || !password || !role) {
-    return res.status(400).json({ error: 'Username, password and role are required.' });
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
   }
 
   try {
-    if (role === 'superadmin') {
-      const admin = await db.SuperAdmin.findOne({ where: { email: username } });
-      if (!admin) {
-        return res.status(401).json({ error: 'Invalid email or password.' });
+    const admin = await db.SuperAdmin.findOne({ where: { email } });
+    if (!admin) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, admin.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const token = generateToken({ id: admin.id, email: admin.email, role: 'superadmin' });
+
+    await db.AuditLog.create({
+      actorId: admin.id,
+      action: 'ADMIN_LOGIN',
+      targetId: admin.id,
+      reason: 'Super Admin logged in.'
+    });
+
+    return res.json({ token, role: 'superadmin', user: { email: admin.email } });
+  } catch (err) {
+    return res.status(500).json({ error: 'Admin login failed.', details: err.message });
+  }
+});
+
+// POST /api/auth/login - Couple login only
+router.post('/login', async (req, res) => {
+  const { username, password, subRole: requestedSubRole } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required.' });
+  }
+
+  try {
+    // Find couple matching either the common username (mobile), bride username, or groom username
+    const couple = await db.Couple.findOne({
+      where: {
+        [db.Sequelize.Op.or]: [
+          { mobile: username },
+          { brideUsername: username },
+          { groomUsername: username }
+        ]
       }
+    });
+    if (!couple) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
 
-      const isMatch = await bcrypt.compare(password, admin.passwordHash);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid email or password.' });
-      }
+    let subRole = requestedSubRole || 'bride';
+    let passwordHashToCheck = couple.passwordHash;
 
-      const token = generateToken({ id: admin.id, email: admin.email, role: 'superadmin' });
-      return res.json({ token, role: 'superadmin', user: { email: admin.email } });
+    if (username === couple.mobile) {
+      passwordHashToCheck = couple.passwordHash;
+      subRole = requestedSubRole || 'bride';
+    } else if (username === couple.brideUsername) {
+      passwordHashToCheck = couple.bridePasswordHash;
+      subRole = 'bride';
+    } else if (username === couple.groomUsername) {
+      passwordHashToCheck = couple.groomPasswordHash;
+      subRole = 'groom';
+    }
 
-    } else if (role === 'couple') {
-      // Find couple matching either the common username (mobile), bride username, or groom username
-      const couple = await db.Couple.findOne({
-        where: {
-          [db.Sequelize.Op.or]: [
-            { mobile: username },
-            { brideUsername: username },
-            { groomUsername: username }
-          ]
-        }
-      });
-      if (!couple) {
-        return res.status(401).json({ error: 'Invalid username or password.' });
-      }
+    const isMatch = await bcrypt.compare(password, passwordHashToCheck);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
 
-      let subRole = req.body.subRole || 'bride';
-      let passwordHashToCheck = couple.passwordHash;
-
-      if (username === couple.mobile) {
-        passwordHashToCheck = couple.passwordHash;
-        subRole = req.body.subRole || 'bride';
-      } else if (username === couple.brideUsername) {
-        passwordHashToCheck = couple.bridePasswordHash;
-        subRole = 'bride';
-      } else if (username === couple.groomUsername) {
-        passwordHashToCheck = couple.groomPasswordHash;
-        subRole = 'groom';
-      }
-
-      const isMatch = await bcrypt.compare(password, passwordHashToCheck);
-      if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid username or password.' });
-      }
-
-      // Check if password reset is forced (mustResetPassword flag) - only for common login
-      if (couple.mustResetPassword && username === couple.mobile) {
-        const token = jwt.sign(
-          { id: couple.id, mobile: couple.mobile, role: 'couple', subRole: 'bride', mustReset: true },
-          JWT_SECRET,
-          { expiresIn: '15m' }
-        );
-        return res.status(200).json({ 
-          mustReset: true, 
-          token, 
-          message: 'First time login. Password reset required.' 
-        });
-      }
-
-      const token = generateToken({ id: couple.id, mobile: couple.mobile, role: 'couple', subRole });
-      return res.json({ 
+    // Check if password reset is forced (mustResetPassword flag) - only for common login
+    if (couple.mustResetPassword && username === couple.mobile) {
+      const token = jwt.sign(
+        { id: couple.id, mobile: couple.mobile, role: 'couple', subRole: 'bride', mustReset: true },
+        JWT_SECRET,
+        { expiresIn: '15m' }
+      );
+      return res.status(200).json({ 
+        mustReset: true, 
         token, 
-        role: 'couple', 
-        subRole,
-        user: { 
-          id: couple.id, 
-          brideName: couple.brideName, 
-          groomName: couple.groomName,
-          slug: couple.slug,
-          permissions: couple.permissions
-        } 
+        message: 'First time login. Password reset required.' 
       });
     }
 
-    return res.status(400).json({ error: 'Invalid role specified.' });
+    const token = generateToken({ id: couple.id, mobile: couple.mobile, role: 'couple', subRole });
+    return res.json({ 
+      token, 
+      role: 'couple', 
+      subRole,
+      user: { 
+        id: couple.id, 
+        brideName: couple.brideName, 
+        groomName: couple.groomName,
+        slug: couple.slug,
+        permissions: couple.permissions
+      } 
+    });
   } catch (err) {
     return res.status(500).json({ error: 'Login failed.', details: err.message });
   }
