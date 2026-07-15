@@ -28,6 +28,9 @@ export const authenticate = async (req, res, next) => {
     }
 
     req.user = decoded;
+    if (decoded.role === 'couple' && !decoded.hostGroup) {
+      req.user.hostGroup = decoded.subRole === 'groom' ? 'HOST_B' : 'HOST_A';
+    }
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -58,19 +61,10 @@ export const verifyCouplePermission = (action) => {
       }
 
       // If couple is logged in, check role-based permissions matrix
-      // JWT token payload includes: { id: coupleId, role: 'couple', subRole: 'bride' | 'groom' }
+      // JWT token payload includes: { id: coupleId, role: 'couple', subRole: 'bride' | 'groom', hostGroup: 'HOST_A' | 'HOST_B' }
       const couple = await db.Couple.findByPk(req.user.id);
       if (!couple) {
         return res.status(404).json({ error: 'Couple account not found.' });
-      }
-
-      const subRole = req.user.subRole || 'bride'; // default to bride if not specified
-      const rolePermissions = couple.permissions[subRole];
-
-      if (!rolePermissions || !rolePermissions[action]) {
-        return res.status(403).json({ 
-          error: `Access denied. ${subRole.toUpperCase()} does not have permission to perform: ${action}` 
-        });
       }
 
       req.couple = couple;

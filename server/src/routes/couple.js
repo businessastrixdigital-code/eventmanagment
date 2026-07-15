@@ -356,7 +356,10 @@ router.get('/guests', async (req, res) => {
     const search = req.query.search || '';
     const invitationType = req.query.invitationType || '';
 
-    let whereCondition = { coupleId: req.user.id };
+    // Enforce data isolation: retrieve hostGroup from authenticated admin profile token
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+
+    let whereCondition = { coupleId: req.user.id, hostGroup };
     if (search) {
       const { Op } = db.Sequelize;
       whereCondition.name = { [Op.like]: `%${search}%` };
@@ -386,7 +389,7 @@ router.get('/guests', async (req, res) => {
 // POST /api/couple/guests - Add manual guest
 router.post('/guests', verifyCouplePermission('manageGuests'), async (req, res) => {
   try {
-    const { name, mobile, email, side, group, inviteEvents, invitationType } = req.body;
+    const { name, mobile, email, hostGroup: reqHostGroup, group, inviteEvents, invitationType } = req.body;
 
     if (!name || !mobile || !invitationType) {
       return res.status(400).json({ error: 'Guest name, mobile number, and invitation type are required.' });
@@ -396,12 +399,15 @@ router.post('/guests', verifyCouplePermission('manageGuests'), async (req, res) 
       return res.status(400).json({ error: 'Invalid invitation type. Must be Sahjode or Sarva.' });
     }
 
+    // Automatically resolve host group from authenticated profile
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+
     const guest = await db.Guest.create({
       coupleId: req.user.id,
       name,
       mobile,
       email,
-      side: side || 'Bride',
+      hostGroup, // Automatically assign the logged-in admin's Host Group
       group: group || 'Other',
       inviteEvents: inviteEvents || [],
       invitationType,
@@ -417,15 +423,17 @@ router.post('/guests', verifyCouplePermission('manageGuests'), async (req, res) 
 // PUT /api/couple/guests/:id - Edit guest
 router.put('/guests/:id', verifyCouplePermission('manageGuests'), async (req, res) => {
   try {
-    const guest = await db.Guest.findOne({ where: { id: req.params.id, coupleId: req.user.id } });
-    if (!guest) return res.status(404).json({ error: 'Guest not found.' });
+    // Enforce data isolation: verify guest belongs to current couple AND the admin's hostGroup
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const guest = await db.Guest.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!guest) return res.status(404).json({ error: 'Guest not found or access denied.' });
 
-    const { name, mobile, email, side, group, inviteEvents, rsvpStatus, customFieldValues, invitationType } = req.body;
+    const { name, mobile, email, hostGroup: reqHostGroup, group, inviteEvents, rsvpStatus, customFieldValues, invitationType } = req.body;
 
     if (name) guest.name = name;
     if (mobile) guest.mobile = mobile;
     if (email !== undefined) guest.email = email;
-    if (side) guest.side = side;
+    if (reqHostGroup && reqHostGroup === hostGroup) guest.hostGroup = reqHostGroup; // Only allow matching host group
     if (group) guest.group = group;
     if (inviteEvents) guest.inviteEvents = inviteEvents;
     if (rsvpStatus) guest.rsvpStatus = rsvpStatus;
@@ -447,8 +455,10 @@ router.put('/guests/:id', verifyCouplePermission('manageGuests'), async (req, re
 // DELETE /api/couple/guests/:id - Delete guest
 router.delete('/guests/:id', verifyCouplePermission('manageGuests'), async (req, res) => {
   try {
-    const guest = await db.Guest.findOne({ where: { id: req.params.id, coupleId: req.user.id } });
-    if (!guest) return res.status(404).json({ error: 'Guest not found.' });
+    // Enforce data isolation: verify guest belongs to current couple AND the admin's hostGroup
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const guest = await db.Guest.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!guest) return res.status(404).json({ error: 'Guest not found or access denied.' });
 
     await guest.destroy();
     return res.json({ success: true, message: 'Guest deleted.' });
@@ -476,12 +486,15 @@ router.post('/guests/bulk', verifyCouplePermission('manageGuests'), async (req, 
     }
 
     const emailIndex = headers.indexOf('email');
-    const sideIndex = headers.indexOf('side');
+    const hostGroupIndex = headers.indexOf('hostgroup') !== -1 ? headers.indexOf('hostgroup') : headers.indexOf('side');
     const groupIndex = headers.indexOf('group');
     const invitationTypeIndex = headers.indexOf('invitationtype') !== -1 ? headers.indexOf('invitationtype') : headers.indexOf('invitation type');
 
     let createdCount = 0;
     let skippedCount = 0;
+
+    // Enforce host group automatically
+    const hostGroup = req.user.hostGroup || 'HOST_A';
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -496,8 +509,6 @@ router.post('/guests/bulk', verifyCouplePermission('manageGuests'), async (req, 
       if (!name || !mobile) continue;
 
       const email = emailIndex !== -1 ? cols[emailIndex] : '';
-      const sideRaw = sideIndex !== -1 ? cols[sideIndex] : 'Bride';
-      const side = (sideRaw.toLowerCase() === 'groom' || sideRaw.toLowerCase() === 'groom side') ? 'Groom' : 'Bride';
       const group = groupIndex !== -1 ? cols[groupIndex] : 'Other';
       
       const invitationTypeRaw = invitationTypeIndex !== -1 ? cols[invitationTypeIndex] : 'Sahjode';
@@ -518,7 +529,7 @@ router.post('/guests/bulk', verifyCouplePermission('manageGuests'), async (req, 
         name,
         mobile,
         email: email || null,
-        side,
+        hostGroup, // Automatically assign the logged-in admin's Host Group
         group,
         inviteEvents: [],
         invitationType,
@@ -586,8 +597,13 @@ router.delete('/custom-fields/:id', verifyCouplePermission('editEvents'), async 
 // GET /api/couple/notifications - List scheduled & historical notifications
 router.get('/notifications', async (req, res) => {
   try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+
     const notifications = await db.Notification.findAll({
-      where: { coupleId: req.user.id },
+      where: { 
+        coupleId: req.user.id,
+        recipients: hostGroup
+      },
       order: [['scheduledAt', 'DESC']]
     });
     return res.json(notifications);
@@ -600,18 +616,20 @@ router.get('/notifications', async (req, res) => {
 // WhatsApp is the only supported channel in this build — there is no email/SMS provider configured.
 router.post('/notifications', verifyCouplePermission('sendNotifications'), async (req, res) => {
   try {
-    const { eventId, template, recipients, scheduledAt, reminderMinutesBefore } = req.body;
+    const { eventId, template, scheduledAt, reminderMinutesBefore } = req.body;
 
     if (!template || !scheduledAt) {
       return res.status(400).json({ error: 'Template and scheduledAt date/time are required.' });
     }
+
+    const hostGroup = req.user.hostGroup || 'HOST_A';
 
     const notification = await db.Notification.create({
       coupleId: req.user.id,
       eventId: eventId || null,
       channel: 'WhatsApp',
       template,
-      recipients: recipients || 'all',
+      recipients: hostGroup,
       status: 'Scheduled',
       scheduledAt: new Date(scheduledAt),
       reminderMinutesBefore: reminderMinutesBefore || null
@@ -621,7 +639,7 @@ router.post('/notifications', verifyCouplePermission('sendNotifications'), async
       actorId: req.user.id,
       action: 'SCHEDULE_NOTIFICATION',
       targetId: notification.id,
-      reason: `Scheduled WhatsApp broadcast for: ${scheduledAt}`
+      reason: `Scheduled WhatsApp broadcast for: ${scheduledAt} targeting ${hostGroup}`
     });
 
     return res.status(201).json(notification);
@@ -675,16 +693,20 @@ router.post('/notifications/:id/sent', verifyCouplePermission('sendNotifications
 // GET /api/couple/whatsapp-url/:id - Generate WhatsApp prefilled link for pending items
 router.get('/whatsapp-url/:id', verifyCouplePermission('sendNotifications'), async (req, res) => {
   try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+
     const notification = await db.Notification.findOne({
-      where: { id: req.params.id, coupleId: req.user.id }
+      where: { id: req.params.id, coupleId: req.user.id, recipients: hostGroup }
     });
-    if (!notification) return res.status(404).json({ error: 'Notification not found.' });
+    if (!notification) return res.status(404).json({ error: 'Notification not found or access denied.' });
 
     const guestId = req.query.guestId;
     if (!guestId) return res.status(400).json({ error: 'Guest ID is required.' });
 
-    const guest = await db.Guest.findByPk(guestId);
-    if (!guest) return res.status(404).json({ error: 'Guest not found.' });
+    const guest = await db.Guest.findOne({
+      where: { id: guestId, coupleId: req.user.id, hostGroup }
+    });
+    if (!guest) return res.status(404).json({ error: 'Guest not found or access denied.' });
 
     const couple = await db.Couple.findByPk(req.user.id);
     if (!couple) return res.status(404).json({ error: 'Couple profile not found.' });
@@ -843,9 +865,16 @@ router.delete('/photos/:id', verifyCouplePermission('managePhotos'), async (req,
 // GET /api/couple/photo-requests - View guest photo access requests
 router.get('/photo-requests', async (req, res) => {
   try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+
     const requests = await db.PhotoAccessRequest.findAll({
       where: { coupleId: req.user.id },
-      include: [db.Guest],
+      include: [
+        {
+          model: db.Guest,
+          where: { hostGroup }
+        }
+      ],
       order: [['createdAt', 'DESC']]
     });
     return res.json(requests);
@@ -862,10 +891,18 @@ router.put('/photo-requests/:id', verifyCouplePermission('managePhotos'), async 
   }
 
   try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+
     const request = await db.PhotoAccessRequest.findOne({
-      where: { id: req.params.id, coupleId: req.user.id }
+      where: { id: req.params.id, coupleId: req.user.id },
+      include: [
+        {
+          model: db.Guest,
+          where: { hostGroup }
+        }
+      ]
     });
-    if (!request) return res.status(404).json({ error: 'Request not found.' });
+    if (!request) return res.status(404).json({ error: 'Request not found or access denied.' });
 
     request.status = status;
     await request.save();

@@ -132,7 +132,6 @@ export default function CoupleDashboardLayout({ children }) {
     { name: translations.message_scheduler, path: '/dashboard/notifications', icon: Bell, show: permissions.sendNotifications },
     { name: translations.photo_gallery, path: '/dashboard/photos', icon: Image, show: permissions.managePhotos },
     { name: translations.website_design, path: '/dashboard/website-editor', icon: Sliders, show: permissions.editEvents },
-    { name: translations.settings, path: '/dashboard/settings', icon: Settings, show: true },
   ];
 
   const handleLogout = async () => {

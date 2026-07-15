@@ -41,10 +41,10 @@ export const processNotifications = async (io) => {
         let guests = [];
         if (notification.recipients === 'all') {
           guests = await db.Guest.findAll({ where: { coupleId: couple.id } });
-        } else if (notification.recipients === 'bride-side') {
-          guests = await db.Guest.findAll({ where: { coupleId: couple.id, side: 'Bride' } });
-        } else if (notification.recipients === 'groom-side') {
-          guests = await db.Guest.findAll({ where: { coupleId: couple.id, side: 'Groom' } });
+        } else if (notification.recipients === 'HOST_A' || notification.recipients === 'bride-side') {
+          guests = await db.Guest.findAll({ where: { coupleId: couple.id, hostGroup: 'HOST_A' } });
+        } else if (notification.recipients === 'HOST_B' || notification.recipients === 'groom-side') {
+          guests = await db.Guest.findAll({ where: { coupleId: couple.id, hostGroup: 'HOST_B' } });
         } else if (Array.isArray(notification.recipients)) {
           guests = await db.Guest.findAll({
             where: {

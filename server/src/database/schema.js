@@ -41,6 +41,8 @@ export const couples = sqliteTable('Couples', {
   sarvaCardUploadedBy: text('sarvaCardUploadedBy'),
   sarvaCardUploadedAt: text('sarvaCardUploadedAt'),
   themeConfig: text('themeConfig', { mode: 'json' }),
+  hostGroupAName: text('hostGroupAName').default('Bride Family'),
+  hostGroupBName: text('hostGroupBName').default('Groom Family'),
   createdAt: text('createdAt'),
   updatedAt: text('updatedAt'),
 });
@@ -70,7 +72,7 @@ export const guests = sqliteTable('Guests', {
   name: text('name').notNull(),
   mobile: text('mobile').notNull(),
   email: text('email'),
-  side: text('side').notNull().default('Bride'),
+  hostGroup: text('hostGroup').notNull().default('HOST_A'),
   group: text('group').notNull().default('Other'),
   inviteEvents: text('inviteEvents', { mode: 'json' }),
   rsvpStatus: text('rsvpStatus', { mode: 'json' }),

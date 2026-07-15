@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Plus, Trash2, X, Bell, MessageSquare, Send, Calendar, Users, HelpCircle, FileText, Upload, Download, Eye } from 'lucide-react';
 
 export default function Notifications() {
-  const { apiRequest, role } = useAuth();
+  const { apiRequest, role, user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [events, setEvents] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -216,8 +216,12 @@ export default function Notifications() {
 
     // Resolve guests invited to the event
     let targetGuests = guests.filter(g => {
-      if (notification.recipients === 'bride-side') return g.side === 'Bride';
-      if (notification.recipients === 'groom-side') return g.side === 'Groom';
+      if (notification.recipients === 'HOST_A' || notification.recipients === 'bride-side') {
+        return g.hostGroup === 'HOST_A' || g.side === 'Bride';
+      }
+      if (notification.recipients === 'HOST_B' || notification.recipients === 'groom-side') {
+        return g.hostGroup === 'HOST_B' || g.side === 'Groom';
+      }
       if (Array.isArray(notification.recipients)) return notification.recipients.includes(g.id);
       return true;
     });
@@ -273,8 +277,12 @@ export default function Notifications() {
 
     const targetGuests = guests
       .filter(g => {
-        if (activePendingNotification.recipients === 'bride-side') return g.side === 'Bride';
-        if (activePendingNotification.recipients === 'groom-side') return g.side === 'Groom';
+        if (activePendingNotification.recipients === 'HOST_A' || activePendingNotification.recipients === 'bride-side') {
+          return g.hostGroup === 'HOST_A' || g.side === 'Bride';
+        }
+        if (activePendingNotification.recipients === 'HOST_B' || activePendingNotification.recipients === 'groom-side') {
+          return g.hostGroup === 'HOST_B' || g.side === 'Groom';
+        }
         return true;
       })
       .filter(g => !activePendingNotification.eventId || (g.inviteEvents && g.inviteEvents.includes(activePendingNotification.eventId)))
@@ -312,8 +320,12 @@ export default function Notifications() {
 
   const getRecipientsLabel = (recipientsVal) => {
     if (recipientsVal === 'all') return 'All Guests';
-    if (recipientsVal === 'bride-side') return "Bride's Side";
-    if (recipientsVal === 'groom-side') return "Groom's Side";
+    if (recipientsVal === 'HOST_A' || recipientsVal === 'bride-side') {
+      return user?.hostGroupAName || 'HOST A';
+    }
+    if (recipientsVal === 'HOST_B' || recipientsVal === 'groom-side') {
+      return user?.hostGroupBName || 'HOST B';
+    }
     return 'Selected Guests';
   };
 
@@ -324,7 +336,10 @@ export default function Notifications() {
           <h1 className="text-3xl font-bold font-jost text-wedding-dark">Message Scheduler</h1>
           <p className="text-sm text-wedding-brown/70 mt-1">Broadcast WhatsApp invitations and reminders to your guest lists</p>
         </div>
-        <button onClick={() => setIsScheduleOpen(true)} className="gold-button flex items-center gap-2 text-sm py-2">
+        <button onClick={() => {
+          setRecipients(user?.hostGroup || 'all');
+          setIsScheduleOpen(true);
+        }} className="gold-button flex items-center gap-2 text-sm py-2">
           <Plus className="h-4 w-4" />
           Schedule Message
         </button>
@@ -361,11 +376,20 @@ export default function Notifications() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Recipients Group</label>
-                  <select value={recipients} onChange={(e) => setRecipients(e.target.value)} className="wedding-input">
-                    <option value="all">All Guests</option>
-                    <option value="bride-side">Bride's Side</option>
-                    <option value="groom-side">Groom's Side</option>
-                  </select>
+                  {user?.hostGroup ? (
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={user.hostGroup === 'HOST_B' ? (user.hostGroupBName || 'Groom Family') : (user.hostGroupAName || 'Bride Family')} 
+                      className="wedding-input bg-wedding-beige/10 cursor-not-allowed font-medium text-wedding-dark"
+                    />
+                  ) : (
+                    <select value={recipients} onChange={(e) => setRecipients(e.target.value)} className="wedding-input">
+                      <option value="all">All Guests</option>
+                      <option value="HOST_A">{user?.hostGroupAName || 'HOST A'}</option>
+                      <option value="HOST_B">{user?.hostGroupBName || 'HOST B'}</option>
+                    </select>
+                  )}
                 </div>
               </div>
 
@@ -438,8 +462,12 @@ export default function Notifications() {
       {activePendingNotification && (() => {
         const totalResolvedGuests = guests
           .filter(g => {
-            if (activePendingNotification.recipients === 'bride-side') return g.side === 'Bride';
-            if (activePendingNotification.recipients === 'groom-side') return g.side === 'Groom';
+            if (activePendingNotification.recipients === 'HOST_A' || activePendingNotification.recipients === 'bride-side') {
+              return g.hostGroup === 'HOST_A' || g.side === 'Bride';
+            }
+            if (activePendingNotification.recipients === 'HOST_B' || activePendingNotification.recipients === 'groom-side') {
+              return g.hostGroup === 'HOST_B' || g.side === 'Groom';
+            }
             if (Array.isArray(activePendingNotification.recipients)) return activePendingNotification.recipients.includes(g.id);
             return true;
           })

@@ -43,6 +43,10 @@ export default function CoupleManagement() {
   // Support Mode Detail View
   const [selectedCoupleDetail, setSelectedCoupleDetail] = useState(null);
 
+  // Custom Host Group Display labels
+  const [hostGroupAName, setHostGroupAName] = useState('Bride Family');
+  const [hostGroupBName, setHostGroupBName] = useState('Groom Family');
+
   // Auto-generation hooks
   useEffect(() => {
     if (brideMobile) {
@@ -105,7 +109,9 @@ export default function CoupleManagement() {
           bridePassword,
           groomMobile,
           groomUsername,
-          groomPassword
+          groomPassword,
+          hostGroupAName,
+          hostGroupBName
         })
       });
       const data = await res.json();
@@ -129,6 +135,8 @@ export default function CoupleManagement() {
         setGroomUsername('');
         setGroomPassword('');
         setCommonPassword('');
+        setHostGroupAName('');
+        setHostGroupBName('');
         fetchCouples();
       } else {
         setError(data.error || 'Failed to create couple.');
@@ -155,7 +163,9 @@ export default function CoupleManagement() {
           groomUsername,
           groomPassword,
           commonPassword,
-          weddingDate 
+          weddingDate,
+          hostGroupAName,
+          hostGroupBName 
         })
       });
       if (res.ok) {
@@ -256,6 +266,8 @@ export default function CoupleManagement() {
     setGroomUsername('');
     setGroomPassword('');
     setCommonPassword('');
+    setHostGroupAName('Bride Family');
+    setHostGroupBName('Groom Family');
     setShowBridePass(true); // default to visible in create
     setShowGroomPass(true);
     setShowCommonPass(true);
@@ -272,6 +284,8 @@ export default function CoupleManagement() {
     setGroomMobile(couple.groomMobile || '');
     setGroomUsername(couple.groomUsername || '');
     setWeddingDate(couple.weddingDate || '');
+    setHostGroupAName(couple.hostGroupAName || 'Bride Family');
+    setHostGroupBName(couple.hostGroupBName || 'Groom Family');
     setBridePassword('');
     setGroomPassword('');
     setCommonPassword('');
@@ -467,6 +481,14 @@ export default function CoupleManagement() {
                     <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Wedding Date</label>
                     <input type="date" value={weddingDate} onChange={(e) => setWeddingDate(e.target.value)} className="wedding-input" />
                   </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Host Group A Display Name</label>
+                    <input type="text" required value={hostGroupAName} onChange={(e) => setHostGroupAName(e.target.value)} className="wedding-input" placeholder="e.g. Bride Family" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Host Group B Display Name</label>
+                    <input type="text" required value={hostGroupBName} onChange={(e) => setHostGroupBName(e.target.value)} className="wedding-input" placeholder="e.g. Groom Family" />
+                  </div>
                 </div>
               </div>
 
@@ -562,6 +584,14 @@ export default function CoupleManagement() {
                   <div>
                     <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Wedding Date</label>
                     <input type="date" value={weddingDate} onChange={(e) => setWeddingDate(e.target.value)} className="wedding-input" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Host Group A Display Name</label>
+                    <input type="text" required value={hostGroupAName} onChange={(e) => setHostGroupAName(e.target.value)} className="wedding-input" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Host Group B Display Name</label>
+                    <input type="text" required value={hostGroupBName} onChange={(e) => setHostGroupBName(e.target.value)} className="wedding-input" />
                   </div>
                 </div>
               </div>

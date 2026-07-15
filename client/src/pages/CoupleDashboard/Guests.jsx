@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Plus, Trash2, Edit, X, Upload, Search, Users, Download, HelpCircle, Check, AlertCircle } from 'lucide-react';
 
 export default function Guests() {
-  const { apiRequest } = useAuth();
+  const { apiRequest, user } = useAuth();
   
   // Data States
   const [guests, setGuests] = useState([]);
@@ -31,7 +31,7 @@ export default function Guests() {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
-  const [side, setSide] = useState('Bride');
+  const [hostGroup, setHostGroup] = useState('HOST_A');
   const [group, setGroup] = useState('Friends');
   const [invitedEventIds, setInvitedEventIds] = useState([]);
   const [csvText, setCsvText] = useState('');
@@ -76,7 +76,7 @@ export default function Guests() {
     try {
       const res = await apiRequest('/api/couple/guests', {
         method: 'POST',
-        body: JSON.stringify({ name, mobile, email, side, group, inviteEvents: invitedEventIds, invitationType })
+        body: JSON.stringify({ name, mobile, email, hostGroup, group, inviteEvents: invitedEventIds, invitationType })
       });
       if (res.ok) {
         setSuccess(`Guest "${name}" added!`);
@@ -85,7 +85,7 @@ export default function Guests() {
         setName('');
         setMobile('');
         setEmail('');
-        setSide('Bride');
+        setHostGroup('HOST_A');
         setGroup('Friends');
         setInvitedEventIds([]);
         setInvitationType('Sahjode');
@@ -110,7 +110,7 @@ export default function Guests() {
           name, 
           mobile, 
           email, 
-          side, 
+          hostGroup, 
           group, 
           inviteEvents: invitedEventIds,
           invitationType,
@@ -204,7 +204,7 @@ export default function Guests() {
     setName(guest.name);
     setMobile(guest.mobile);
     setEmail(guest.email || '');
-    setSide(guest.side);
+    setHostGroup(guest.hostGroup || 'HOST_A');
     setGroup(guest.group);
     setInvitedEventIds(guest.inviteEvents || []);
     setInvitationType(guest.invitationType || 'Sahjode');
@@ -212,7 +212,7 @@ export default function Guests() {
   };
 
   const exportCSVTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8,name,mobile,email,side,group\nJane Doe,9876543210,jane@example.com,Bride,Family\nJohn Smith,9123456789,john@example.com,Groom,Friends";
+    const csvContent = "data:text/csv;charset=utf-8,name,mobile,email,hostGroup,group\nJane Doe,9876543210,jane@example.com,HOST_A,Family\nJohn Smith,9123456789,john@example.com,HOST_B,Friends";
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -259,7 +259,10 @@ export default function Guests() {
             <Upload className="h-4 w-4" />
             Bulk CSV Import
           </button>
-          <button onClick={() => setIsAddOpen(true)} className="gold-button flex items-center gap-2 text-xs py-2 px-3">
+          <button onClick={() => {
+            setHostGroup(user?.hostGroup || 'HOST_A');
+            setIsAddOpen(true);
+          }} className="gold-button flex items-center gap-2 text-xs py-2 px-3">
             <Plus className="h-4 w-4" />
             Add Guest
           </button>
@@ -343,7 +346,7 @@ export default function Guests() {
                 required
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
-                placeholder="name,mobile,email,side,group&#10;Karan Sharma,9999911111,karan@gmail.com,Groom,Friends&#10;Asha Patel,8888822222,,Bride,Family"
+                placeholder="name,mobile,email,hostGroup,group&#10;Karan Sharma,9999911111,karan@gmail.com,HOST_B,Friends&#10;Asha Patel,8888822222,,HOST_A,Family"
                 className="wedding-input font-mono text-xs"
               />
               <button type="submit" className="gold-button w-full">Process Guest List</button>
@@ -379,11 +382,20 @@ export default function Guests() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Wedding Side</label>
-                  <select value={side} onChange={(e) => setSide(e.target.value)} className="wedding-input">
-                    <option value="Bride">Bride Side</option>
-                    <option value="Groom">Groom Side</option>
-                  </select>
+                  <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Host Group</label>
+                  {user?.hostGroup ? (
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={user.hostGroup === 'HOST_B' ? (user.hostGroupBName || 'Groom Family') : (user.hostGroupAName || 'Bride Family')} 
+                      className="wedding-input bg-wedding-beige/10 cursor-not-allowed font-medium text-wedding-dark"
+                    />
+                  ) : (
+                    <select value={hostGroup} onChange={(e) => setHostGroup(e.target.value)} className="wedding-input">
+                      <option value="HOST_A">{user?.hostGroupAName || 'HOST A'}</option>
+                      <option value="HOST_B">{user?.hostGroupBName || 'HOST B'}</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Tag Group</label>
@@ -451,11 +463,20 @@ export default function Guests() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Wedding Side</label>
-                  <select value={side} onChange={(e) => setSide(e.target.value)} className="wedding-input">
-                    <option value="Bride">Bride Side</option>
-                    <option value="Groom">Groom Side</option>
-                  </select>
+                  <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Host Group</label>
+                  {user?.hostGroup ? (
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={user.hostGroup === 'HOST_B' ? (user.hostGroupBName || 'Groom Family') : (user.hostGroupAName || 'Bride Family')} 
+                      className="wedding-input bg-wedding-beige/10 cursor-not-allowed font-medium text-wedding-dark"
+                    />
+                  ) : (
+                    <select value={hostGroup} onChange={(e) => setHostGroup(e.target.value)} className="wedding-input">
+                      <option value="HOST_A">{user?.hostGroupAName || 'HOST A'}</option>
+                      <option value="HOST_B">{user?.hostGroupBName || 'HOST B'}</option>
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Tag Group</label>
@@ -503,7 +524,7 @@ export default function Guests() {
             <table className="min-w-full divide-y divide-wedding-gold/10">
               <thead className="bg-wedding-brown/5 text-wedding-brown/80 text-xs font-semibold uppercase">
                 <tr>
-                  <th className="px-6 py-4 text-left">Guest Name & Side</th>
+                  <th className="px-6 py-4 text-left">Guest Name & Host Group</th>
                   <th className="px-6 py-4 text-left">Phone & Group</th>
                   <th className="px-6 py-4 text-left">Invitation Type</th>
                   {/* Dynamic Event Columns for RSVP status */}
@@ -528,9 +549,9 @@ export default function Guests() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <p className="font-semibold text-wedding-dark">{g.name}</p>
                         <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full mt-1 ${
-                          g.side === 'Bride' ? 'bg-pink-50 text-pink-700 border border-pink-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                          (g.hostGroup === 'HOST_B' || g.side === 'Groom') ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-pink-50 text-pink-700 border border-pink-200'
                         }`}>
-                          {g.side} Side
+                          {(g.hostGroup === 'HOST_B' || g.side === 'Groom') ? (user?.hostGroupBName || 'Groom Family') : (user?.hostGroupAName || 'Bride Family')}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

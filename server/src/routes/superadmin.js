@@ -151,7 +151,9 @@ router.post('/couples', async (req, res) => {
       groomPasswordHash,
       slug,
       weddingDate: weddingDate || null,
-      mustResetPassword: false
+      mustResetPassword: false,
+      hostGroupAName: req.body.hostGroupAName || 'Bride Family',
+      hostGroupBName: req.body.hostGroupBName || 'Groom Family'
     });
 
     // Write to audit log
@@ -175,7 +177,9 @@ router.post('/couples', async (req, res) => {
         brideMobile: newCouple.brideMobile,
         brideUsername: newCouple.brideUsername,
         groomMobile: newCouple.groomMobile,
-        groomUsername: newCouple.groomUsername
+        groomUsername: newCouple.groomUsername,
+        hostGroupAName: newCouple.hostGroupAName,
+        hostGroupBName: newCouple.hostGroupBName
       },
       tempPassword: cleanCommonPassword,
       bridePassword: cleanBridePassword,
@@ -200,7 +204,9 @@ router.put('/couples/:coupleId', async (req, res) => {
     groomPassword,
     commonPassword,
     weddingDate, 
-    permissions 
+    permissions,
+    hostGroupAName,
+    hostGroupBName
   } = req.body;
 
   try {
@@ -218,6 +224,8 @@ router.put('/couples/:coupleId', async (req, res) => {
     if (groomUsername) couple.groomUsername = groomUsername;
     if (weddingDate) couple.weddingDate = weddingDate;
     if (permissions) couple.permissions = permissions;
+    if (hostGroupAName) couple.hostGroupAName = hostGroupAName;
+    if (hostGroupBName) couple.hostGroupBName = hostGroupBName;
 
     if (commonPassword) {
       couple.passwordHash = await bcrypt.hash(commonPassword, 10);

@@ -90,6 +90,8 @@ router.post('/login', async (req, res) => {
       subRole = 'groom';
     }
 
+    const hostGroup = subRole === 'groom' ? 'HOST_B' : 'HOST_A';
+
     const isMatch = await bcrypt.compare(password, passwordHashToCheck);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid username or password.' });
@@ -98,7 +100,7 @@ router.post('/login', async (req, res) => {
     // Check if password reset is forced (mustResetPassword flag) - only for common login
     if (couple.mustResetPassword && username === couple.mobile) {
       const token = jwt.sign(
-        { id: couple.id, mobile: couple.mobile, role: 'couple', subRole: 'bride', mustReset: true },
+        { id: couple.id, mobile: couple.mobile, role: 'couple', subRole: 'bride', hostGroup: 'HOST_A', mustReset: true },
         JWT_SECRET,
         { expiresIn: '15m' }
       );
@@ -109,17 +111,21 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const token = generateToken({ id: couple.id, mobile: couple.mobile, role: 'couple', subRole });
+    const token = generateToken({ id: couple.id, mobile: couple.mobile, role: 'couple', subRole, hostGroup });
     return res.json({ 
       token, 
       role: 'couple', 
       subRole,
+      hostGroup,
       user: { 
         id: couple.id, 
         brideName: couple.brideName, 
         groomName: couple.groomName,
         slug: couple.slug,
-        permissions: couple.permissions
+        permissions: couple.permissions,
+        hostGroup,
+        hostGroupAName: couple.hostGroupAName || 'Bride Family',
+        hostGroupBName: couple.hostGroupBName || 'Groom Family'
       } 
     });
   } catch (err) {
@@ -193,12 +199,11 @@ router.post('/otp/verify', async (req, res) => {
       if (!name) {
         return res.status(400).json({ error: 'Guest does not exist. Name required to register.' });
       }
-      // Auto-register new guest on the fly
       guest = await db.Guest.create({
         coupleId: storedOtp.coupleId,
         name,
         mobile,
-        side: 'Bride', // default
+        hostGroup: 'HOST_A', // default
         group: 'Other',
         inviteEvents: [],
         rsvpStatus: {}
@@ -294,15 +299,20 @@ router.get('/me', authenticate, async (req, res) => {
     if (req.user.role === 'couple') {
       const couple = await db.Couple.findByPk(req.user.id);
       if (!couple) return res.status(404).json({ error: 'Couple not found.' });
+      const resolvedHostGroup = req.user.hostGroup || (req.user.subRole === 'groom' ? 'HOST_B' : 'HOST_A');
       return res.json({ 
         role: 'couple', 
         subRole: req.user.subRole,
+        hostGroup: resolvedHostGroup,
         user: { 
           id: couple.id, 
           brideName: couple.brideName, 
           groomName: couple.groomName,
           slug: couple.slug,
-          permissions: couple.permissions
+          permissions: couple.permissions,
+          hostGroup: resolvedHostGroup,
+          hostGroupAName: couple.hostGroupAName || 'Bride Family',
+          hostGroupBName: couple.hostGroupBName || 'Groom Family'
         } 
       });
     }
