@@ -18,7 +18,6 @@ import CoupleInvitationTemplates from './pages/CoupleDashboard/InvitationTemplat
 import CouplePhotos from './pages/CoupleDashboard/Photos';
 import CoupleWebsiteEditor from './pages/CoupleDashboard/WebsiteEditor';
 import CoupleSettings from './pages/CoupleDashboard/Settings';
-import CoupleCustomMessages from './pages/CoupleDashboard/CustomMessages';
 
 import PublicInvitation from './pages/PublicWebsite/InvitationPage';
 
@@ -129,11 +128,6 @@ function RootRoutes() {
       <Route path="/dashboard/settings" element={
         <ProtectedRoute allowedRoles={['couple']}>
           <CoupleSettings />
-        </ProtectedRoute>
-      } />
-      <Route path="/dashboard/custom-messages" element={
-        <ProtectedRoute allowedRoles={['couple']}>
-          <CoupleCustomMessages />
         </ProtectedRoute>
       } />
 

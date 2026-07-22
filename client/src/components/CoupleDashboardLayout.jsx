@@ -135,7 +135,6 @@ export default function CoupleDashboardLayout({ children }) {
     { name: translations.events_plan, path: '/dashboard/events', icon: Calendar, show: permissions.editEvents },
     { name: translations.guest_list, path: '/dashboard/guests', icon: Users, show: permissions.manageGuests },
     { name: translations.card_templates, path: '/dashboard/invitation-templates', icon: FileText, show: permissions.editEvents },
-    { name: translations.custom_messages, path: '/dashboard/custom-messages', icon: MessageSquare, show: permissions.sendNotifications },
     { name: translations.message_scheduler, path: '/dashboard/notifications', icon: Bell, show: permissions.sendNotifications },
     { name: translations.photo_gallery, path: '/dashboard/photos', icon: Image, show: permissions.managePhotos },
     { name: translations.website_design, path: '/dashboard/website-editor', icon: Sliders, show: permissions.editEvents },

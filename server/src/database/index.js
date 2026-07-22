@@ -39,5 +39,17 @@ try {
   console.error('[DATABASE] Drizzle migrations failed:', err);
 }
 
+// Auto-heal local SQLite/Turso tables by ensuring status and lastTriggeredAt columns exist on MessageReminders
+try {
+  await client.execute(`ALTER TABLE MessageReminders ADD COLUMN status TEXT DEFAULT 'Active';`);
+} catch (e) {
+  // Column already exists, safe to ignore
+}
+try {
+  await client.execute(`ALTER TABLE MessageReminders ADD COLUMN lastTriggeredAt TEXT;`);
+} catch (e) {
+  // Column already exists, safe to ignore
+}
+
 export { db };
 export default db;

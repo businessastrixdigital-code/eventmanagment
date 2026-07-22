@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CoupleDashboardLayout from '../../components/CoupleDashboardLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { Users, FileText, CheckCircle, HelpCircle, XCircle, ArrowRight } from 'lucide-react';
+import { Users, FileText, CheckCircle, HelpCircle, XCircle, ArrowRight, Bell, Clock, Send, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Overview() {
@@ -18,6 +18,7 @@ export default function Overview() {
   const [recentRsvps, setRecentRsvps] = useState([]);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [events, setEvents] = useState([]);
+  const [commStats, setCommStats] = useState({ scheduled: 0, pendingReminders: 0, today: 0, failed: 0 });
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
@@ -34,7 +35,6 @@ export default function Overview() {
         let pending = 0;
 
         list.forEach(g => {
-          // Check if they confirmed Yes to any event
           const statuses = Object.values(g.rsvpStatus || {});
           if (statuses.includes('Yes')) {
             yes++;
@@ -47,10 +47,9 @@ export default function Overview() {
 
         setStats({ total, yes, no, pending });
         
-        // Find recent RSVPs
         const answered = list
           .filter(g => Object.keys(g.rsvpStatus || {}).length > 0)
-          .slice(0, 5); // take 5
+          .slice(0, 5);
         setRecentRsvps(answered);
       }
 
@@ -66,7 +65,21 @@ export default function Overview() {
       const eventsRes = await apiRequest('/api/couple/events');
       if (eventsRes.ok) {
         const data = await eventsRes.json();
-        setEvents(data.slice(0, 3)); // show first 3
+        setEvents(data.slice(0, 3));
+      }
+
+      // 4. Fetch Communication Center notification stats
+      const notifRes = await apiRequest('/api/couple/notifications');
+      if (notifRes.ok) {
+        const notifs = await notifRes.json();
+        const scheduled = notifs.filter(n => n.status === 'Scheduled').length;
+        const pendingReminders = notifs.filter(n => n.status === 'Pending-Action').length;
+        const today = notifs.filter(n => {
+          if (!n.scheduledAt) return false;
+          return new Date(n.scheduledAt).toDateString() === new Date().toDateString();
+        }).length;
+        const failed = notifs.filter(n => n.status === 'Failed').length;
+        setCommStats({ scheduled, pendingReminders, today, failed });
       }
     } catch (err) {
       console.error(err);
@@ -152,6 +165,53 @@ export default function Overview() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-wedding-brown/50">Pending RSVP</p>
                 <h3 className="text-2xl font-bold font-jost text-amber-600 mt-0.5">{stats.pending}</h3>
+              </div>
+            </div>
+          </div>
+
+          {/* Communication Center Overview Widget */}
+          <div className="wedding-card bg-white p-6 border border-wedding-gold/15">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-bold font-jost text-wedding-dark">Communication Center</h3>
+                <p className="text-xs text-wedding-brown/60">Overview of scheduled notifications, reminders, and delivery queue</p>
+              </div>
+              <Link to="/dashboard/notifications" className="text-xs font-bold text-wedding-gold hover:underline flex items-center gap-1">
+                Open Center <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-center gap-3">
+                <Clock className="h-5 w-5 text-blue-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-blue-800 block">Scheduled</span>
+                  <span className="text-lg font-bold text-blue-900">{commStats.scheduled}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 flex items-center gap-3">
+                <Bell className="h-5 w-5 text-amber-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-amber-800 block">Pending Reminders</span>
+                  <span className="text-lg font-bold text-amber-900">{commStats.pendingReminders}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 flex items-center gap-3">
+                <Send className="h-5 w-5 text-purple-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-purple-800 block">Today's Messages</span>
+                  <span className="text-lg font-bold text-purple-900">{commStats.today}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-red-50/60 rounded-xl border border-red-100 flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-red-800 block">Failed Deliveries</span>
+                  <span className="text-lg font-bold text-red-900">{commStats.failed}</span>
+                </div>
               </div>
             </div>
           </div>

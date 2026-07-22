@@ -173,6 +173,8 @@ export const messageReminders = sqliteTable('MessageReminders', {
   timing: text('timing').notNull(),
   customMinutesBefore: integer('customMinutesBefore'),
   isEnabled: integer('isEnabled', { mode: 'boolean' }).default(true),
+  status: text('status').default('Active'),
+  lastTriggeredAt: text('lastTriggeredAt'),
   createdAt: text('createdAt'),
   updatedAt: text('updatedAt'),
 });

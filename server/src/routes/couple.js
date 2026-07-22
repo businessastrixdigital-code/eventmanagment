@@ -1039,72 +1039,52 @@ router.get('/whatsapp-url/:id', verifyCouplePermission('sendNotifications'), asy
     const couple = await db.Couple.findByPk(req.user.id);
     if (!couple) return res.status(404).json({ error: 'Couple profile not found.' });
 
-    // Validate if the correct PDF exists
+    // Auto-select Sahjode vs Sarva PDF based on guest invitationType
     const invType = guest.invitationType || 'Sahjode';
-    const sahjodeCard = couple.sahjodeCard || couple.sahjodeCardUrl;
-    const sarvaCard = couple.sarvaCard || couple.sarvaCardUrl;
-
-    if (invType === 'Sahjode' && !sahjodeCard) {
-      return res.status(400).json({ error: 'Sahjode Invitation Card has not been uploaded.' });
-    }
-    if (invType === 'Sarva' && !sarvaCard) {
-      return res.status(400).json({ error: 'Sarva Invitation Card has not been uploaded.' });
-    }
+    const sahjodeCard = couple.sahjodeCardUrl || couple.sahjodeCard;
+    const sarvaCard = couple.sarvaCardUrl || couple.sarvaCard;
 
     const cardUrl = invType === 'Sarva' ? sarvaCard : sahjodeCard;
-
     const event = notification.eventId ? await db.Event.findByPk(notification.eventId) : null;
 
-    // Dynamically resolve client domain based on the request's origin/referer headers, 
-    // ensuring live Vercel domains are automatically selected without hardcoding.
     let host = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : '');
-    
     if (!host) {
       host = process.env.CLIENT_URL || 'http://localhost:5173';
     }
     
     const loginUrl = `${host}/invite/${couple.slug}`;
-    const locationLink = event && event.mapsLink ? event.mapsLink : '';
+    const locationLink = event && (event.mapLink || event.mapsLink) ? (event.mapLink || event.mapsLink) : '';
+    const hostGroupName = hostGroup === 'HOST_B' ? (couple.hostGroupBName || 'Groom Family') : (couple.hostGroupAName || 'Bride Family');
 
     const data = {
       guestName: guest.name,
+      functionName: hostGroupName,
       eventName: event ? event.title : 'Wedding Celebration',
       venue: event ? event.venue : '',
       time: event ? event.time : '',
       date: event ? event.date : '',
-      cardUrl: cardUrl,
+      cardUrl: cardUrl || '',
       locationLink: locationLink,
       loginUrl: loginUrl
     };
 
-    // Helper function import/usage
     const compileTemplate = (template, data) => {
-      let msg = template
-        .replace(/{guestName}/g, data.guestName || '')
-        .replace(/{eventName}/g, data.eventName || '')
-        .replace(/{venue}/g, data.venue || '')
-        .replace(/{time}/g, data.time || '')
-        .replace(/{date}/g, data.date || '');
+      let msg = (template || '')
+        .replace(/\{\{guestName\}\}|\{guestName\}/g, data.guestName || '')
+        .replace(/\{\{functionName\}\}|\{functionName\}/g, data.functionName || '')
+        .replace(/\{\{eventName\}\}|\{eventName\}/g, data.eventName || '')
+        .replace(/\{\{eventDate\}\}|\{eventDate\}|\{date\}/g, data.date || '')
+        .replace(/\{\{eventTime\}\}|\{eventTime\}|\{time\}/g, data.time || '')
+        .replace(/\{\{venue\}\}|\{venue\}/g, data.venue || '')
+        .replace(/\{\{googleMap\}\}|\{googleMap\}|\{location\}/g, data.locationLink || data.venue || '')
+        .replace(/\{\{guestPortal\}\}|\{guestPortal\}|\{loginUrl\}/g, data.loginUrl || '');
 
-      // Handle location / maps link placeholder
-      if (msg.includes('{location}')) {
-        msg = msg.replace(/{location}/g, data.locationLink || data.venue || '');
-      } else if (data.locationLink) {
-        msg = `${msg}\n\nVenue Location Map: ${data.locationLink}`;
-      }
-
-      // Handle login / wedding site URL placeholder
-      if (msg.includes('{loginUrl}')) {
-        msg = msg.replace(/{loginUrl}/g, data.loginUrl || '');
-      } else {
-        msg = `${msg}\n\nRSVP & Wedding Details: ${data.loginUrl}`;
-      }
-
-      // Handle PDF Card URL
-      if (msg.includes('{cardUrl}')) {
-        msg = msg.replace(/{cardUrl}/g, data.cardUrl || '');
-      } else if (data.cardUrl) {
-        msg = `${msg}\n\nInvitation Card: ${data.cardUrl}`;
+      if (data.cardUrl) {
+        if (msg.includes('{{cardUrl}}') || msg.includes('{cardUrl}')) {
+          msg = msg.replace(/\{\{cardUrl\}\}|\{cardUrl\}/g, data.cardUrl);
+        } else if (!msg.includes(data.cardUrl)) {
+          msg = `${msg}\n\nInvitation Card (${invType}): ${data.cardUrl}`;
+        }
       }
       return msg;
     };

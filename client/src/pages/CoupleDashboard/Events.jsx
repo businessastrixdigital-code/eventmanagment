@@ -6,6 +6,7 @@ import { Plus, Trash2, Edit, X, Calendar, MapPin, Sparkles } from 'lucide-react'
 export default function Events() {
   const { apiRequest } = useAuth();
   const [events, setEvents] = useState([]);
+  const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -29,12 +30,18 @@ export default function Events() {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      const res = await apiRequest('/api/couple/events');
-      if (res.ok) {
-        const data = await res.json();
+      const [resEvents, resReminders] = await Promise.all([
+        apiRequest('/api/couple/events'),
+        apiRequest('/api/couple/message-reminders')
+      ]);
+
+      if (resEvents.ok) {
+        const data = await resEvents.json();
         setEvents(data);
-      } else {
-        setError('Failed to fetch events.');
+      }
+      if (resReminders.ok) {
+        const rData = await resReminders.json();
+        setReminders(rData.data || []);
       }
     } catch (err) {
       setError('Connection error.');
@@ -390,6 +397,35 @@ export default function Events() {
                         <Sparkles className="h-4 w-4 text-wedding-gold" />
                         <span>Dress Code: <strong className="text-wedding-dark">{evt.dressCode}</strong></span>
                       </div>
+                    )}
+                  </div>
+
+                  {/* EVENT REMINDERS INTEGRATION */}
+                  <div className="bg-wedding-beige/20 border border-wedding-gold/10 p-3 rounded-xl mb-4 space-y-2">
+                    <div className="flex justify-between items-center text-xs font-bold text-wedding-dark">
+                      <span>Event Reminders</span>
+                      <span className="text-[10px] text-wedding-brown/60">
+                        {reminders.filter(r => r.eventId === evt.id).length} Configured
+                      </span>
+                    </div>
+                    {reminders.filter(r => r.eventId === evt.id).length === 0 ? (
+                      <p className="text-[11px] text-wedding-brown/50 italic">No reminder schedule configured for this event.</p>
+                    ) : (
+                      reminders.filter(r => r.eventId === evt.id).map(r => (
+                        <div key={r.id} className="text-[11px] bg-white p-2 rounded-lg border border-wedding-gold/10 flex justify-between items-center">
+                          <div>
+                            <span className="font-semibold text-wedding-dark block">
+                              Schedule: {r.timing === '7_days_before' ? '7 Days Before' : r.timing === '3_days_before' ? '3 Days Before' : r.timing === '1_day_before' ? '1 Day Before' : r.timing === '2_hours_before' ? '2 Hours Before' : r.timing === '30_mins_before' ? '30 Mins Before' : `${r.customMinutesBefore} Mins Before`}
+                            </span>
+                            <span className="text-[10px] text-wedding-brown/60 block">
+                              Last Trigger: {r.lastTriggeredAt ? new Date(r.lastTriggeredAt).toLocaleString() : 'Not triggered yet'}
+                            </span>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${r.isEnabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                            {r.isEnabled ? (r.status || 'Active') : 'Disabled'}
+                          </span>
+                        </div>
+                      ))
                     )}
                   </div>
                 </div>
