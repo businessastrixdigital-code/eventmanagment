@@ -13,11 +13,12 @@ import AuditLogs from './pages/SuperAdmin/AuditLogs';
 import CoupleOverview from './pages/CoupleDashboard/Overview';
 import CoupleEvents from './pages/CoupleDashboard/Events';
 import CoupleGuests from './pages/CoupleDashboard/Guests';
-import CoupleFormBuilder from './pages/CoupleDashboard/FormBuilder';
 import CoupleNotifications from './pages/CoupleDashboard/Notifications';
+import CoupleInvitationTemplates from './pages/CoupleDashboard/InvitationTemplates';
 import CouplePhotos from './pages/CoupleDashboard/Photos';
 import CoupleWebsiteEditor from './pages/CoupleDashboard/WebsiteEditor';
 import CoupleSettings from './pages/CoupleDashboard/Settings';
+import CoupleCustomMessages from './pages/CoupleDashboard/CustomMessages';
 
 import PublicInvitation from './pages/PublicWebsite/InvitationPage';
 
@@ -104,14 +105,15 @@ function RootRoutes() {
           <CoupleGuests />
         </ProtectedRoute>
       } />
-      <Route path="/dashboard/form-builder" element={
-        <ProtectedRoute allowedRoles={['couple']}>
-          <CoupleFormBuilder />
-        </ProtectedRoute>
-      } />
+
       <Route path="/dashboard/notifications" element={
         <ProtectedRoute allowedRoles={['couple']}>
           <CoupleNotifications />
+        </ProtectedRoute>
+      } />
+      <Route path="/dashboard/invitation-templates" element={
+        <ProtectedRoute allowedRoles={['couple']}>
+          <CoupleInvitationTemplates />
         </ProtectedRoute>
       } />
       <Route path="/dashboard/photos" element={
@@ -127,6 +129,11 @@ function RootRoutes() {
       <Route path="/dashboard/settings" element={
         <ProtectedRoute allowedRoles={['couple']}>
           <CoupleSettings />
+        </ProtectedRoute>
+      } />
+      <Route path="/dashboard/custom-messages" element={
+        <ProtectedRoute allowedRoles={['couple']}>
+          <CoupleCustomMessages />
         </ProtectedRoute>
       } />
 

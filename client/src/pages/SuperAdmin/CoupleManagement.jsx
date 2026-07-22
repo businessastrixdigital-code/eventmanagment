@@ -385,6 +385,24 @@ export default function CoupleManagement() {
               </div>
             </div>
 
+            {/* Quick Share Credentials via WhatsApp */}
+            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-3">
+              <div className="text-center md:text-left">
+                <h4 className="text-xs font-bold text-green-800">Share credentials via WhatsApp</h4>
+                <p className="text-[10px] text-green-700 mt-0.5">Open a prefilled chat to forward login details to the client.</p>
+              </div>
+              <button 
+                onClick={() => {
+                  const payload = `Hello! Here are your wedding event management workspace login details:\n\n*1. Common Account*\n- Mobile / Username: ${revealedCredentials.couple?.mobile || mobile}\n- Temporary Password: ${revealedCredentials.tempPassword}\n\n*2. Bride Account (${revealedCredentials.couple?.brideName})*\n- Username: ${revealedCredentials.couple?.brideUsername || brideUsername}\n- Temporary Password: ${revealedCredentials.bridePassword}\n\n*3. Groom Account (${revealedCredentials.couple?.groomName})*\n- Username: ${revealedCredentials.couple?.groomUsername || groomUsername}\n- Temporary Password: ${revealedCredentials.groomPassword}`;
+                  const cleanMobile = (revealedCredentials.couple?.mobile || mobile || '').replace(/[^0-9]/g, '');
+                  window.open(`https://wa.me/${cleanMobile}?text=${encodeURIComponent(payload)}`, '_blank');
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-4 rounded-xl shadow-sm transition-colors shrink-0"
+              >
+                Send via WhatsApp
+              </button>
+            </div>
+
             {copied && <div className="text-center text-xs text-green-600 font-semibold mt-4">Copied to clipboard!</div>}
 
             <button onClick={() => setRevealedCredentials(null)} className="gold-button w-full mt-6">

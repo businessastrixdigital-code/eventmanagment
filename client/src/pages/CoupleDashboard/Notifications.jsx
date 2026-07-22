@@ -26,6 +26,17 @@ export default function Notifications() {
   const [couple, setCouple] = useState(null);
   const [selectedGuests, setSelectedGuests] = useState({});
 
+  // Message Template States
+  const [messageTemplates, setMessageTemplates] = useState([]);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState(null);
+  const [templateName, setTemplateName] = useState('');
+  const [messageType, setMessageType] = useState('Invitation');
+  const [audience, setAudience] = useState('all');
+  const [messageContent, setMessageContent] = useState('');
+  const [autoAttachInvitation, setAutoAttachInvitation] = useState(false);
+  const [isActive, setIsActive] = useState(true);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -51,6 +62,12 @@ export default function Notifications() {
       if (coupleRes.ok) {
         const data = await coupleRes.json();
         setCouple(data);
+      }
+
+      const templatesRes = await apiRequest('/api/couple/message-templates');
+      if (templatesRes.ok) {
+        const resData = await templatesRes.json();
+        setMessageTemplates(resData.data || []);
       }
     } catch (err) {
       setError('Connection error.');
@@ -318,6 +335,133 @@ export default function Notifications() {
     }
   };
 
+  // Message Template CRUD Handlers
+  const openCreateTemplateDialog = () => {
+    setEditingTemplateId(null);
+    setTemplateName('');
+    setMessageType('Invitation');
+    setAudience('all');
+    setMessageContent('');
+    setAutoAttachInvitation(false);
+    setIsActive(true);
+    setError('');
+    setSuccess('');
+    setIsTemplateDialogOpen(true);
+  };
+
+  const openEditTemplateDialog = (t) => {
+    setEditingTemplateId(t.id);
+    setTemplateName(t.templateName);
+    setMessageType(t.messageType);
+    setAudience(t.audience);
+    setMessageContent(t.messageContent);
+    setAutoAttachInvitation(!!t.autoAttachInvitation);
+    setIsActive(!!t.isActive);
+    setError('');
+    setSuccess('');
+    setIsTemplateDialogOpen(true);
+  };
+
+  const handleSaveTemplate = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!templateName || !messageType || !messageContent) {
+      setError('Template Name, Message Type, and Message Content are required.');
+      return;
+    }
+
+    const payload = {
+      templateName,
+      messageType,
+      audience,
+      messageContent,
+      autoAttachInvitation,
+      isActive
+    };
+
+    try {
+      const url = editingTemplateId 
+        ? `/api/couple/message-templates/${editingTemplateId}` 
+        : '/api/couple/message-templates';
+      const method = editingTemplateId ? 'PUT' : 'POST';
+
+      const res = await apiRequest(url, {
+        method,
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(editingTemplateId ? 'Message template updated successfully!' : 'Message template created successfully!');
+        setIsTemplateDialogOpen(false);
+        fetchData();
+      } else {
+        setError(data.message || 'Failed to save message template.');
+      }
+    } catch (err) {
+      setError('Network error saving template.');
+    }
+  };
+
+  const handleDuplicateMessageTemplate = async (id) => {
+    setError('');
+    setSuccess('');
+    try {
+      const res = await apiRequest(`/api/couple/message-templates/${id}/duplicate`, { method: 'POST' });
+      if (res.ok) {
+        setSuccess('Message template duplicated.');
+        fetchData();
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to duplicate template.');
+      }
+    } catch (err) {
+      setError('Network error duplicating template.');
+    }
+  };
+
+  const handleToggleMessageTemplateStatus = async (t) => {
+    setError('');
+    setSuccess('');
+    try {
+      const nextStatus = !t.isActive;
+      const res = await apiRequest(`/api/couple/message-templates/${t.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isActive: nextStatus })
+      });
+      if (res.ok) {
+        setSuccess(`Message template ${nextStatus ? 'enabled' : 'disabled'}.`);
+        fetchData();
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to toggle status.');
+      }
+    } catch (err) {
+      setError('Network error updating template status.');
+    }
+  };
+
+  const handleDeleteMessageTemplate = async (id) => {
+    if (!confirm('Are you sure you want to delete this message template?')) {
+      return;
+    }
+    setError('');
+    setSuccess('');
+    try {
+      const res = await apiRequest(`/api/couple/message-templates/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSuccess('Message template deleted.');
+        fetchData();
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to delete template.');
+      }
+    } catch (err) {
+      setError('Network error deleting template.');
+    }
+  };
+
   const getRecipientsLabel = (recipientsVal) => {
     if (recipientsVal === 'all') return 'All Guests';
     if (recipientsVal === 'HOST_A' || recipientsVal === 'bride-side') {
@@ -336,13 +480,19 @@ export default function Notifications() {
           <h1 className="text-3xl font-bold font-jost text-wedding-dark">Message Scheduler</h1>
           <p className="text-sm text-wedding-brown/70 mt-1">Broadcast WhatsApp invitations and reminders to your guest lists</p>
         </div>
-        <button onClick={() => {
-          setRecipients(user?.hostGroup || 'all');
-          setIsScheduleOpen(true);
-        }} className="gold-button flex items-center gap-2 text-sm py-2">
-          <Plus className="h-4 w-4" />
-          Schedule Message
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={openCreateTemplateDialog} className="gold-button flex items-center gap-2 text-sm py-2">
+            <Plus className="h-4 w-4" />
+            Create Template
+          </button>
+          <button onClick={() => {
+            setRecipients(user?.hostGroup || 'all');
+            setIsScheduleOpen(true);
+          }} className="outline-button flex items-center gap-2 text-sm py-2 bg-white">
+            <Calendar className="h-4 w-4" />
+            Schedule Message
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -354,6 +504,115 @@ export default function Notifications() {
       {success && (
         <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded-xl text-sm text-green-700 mb-8">
           {success}
+        </div>
+      )}
+
+      {/* TEMPLATE DIALOG MODAL */}
+      {isTemplateDialogOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-wedding-cream p-8 rounded-3xl border border-wedding-gold/20 shadow-wedding max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setIsTemplateDialogOpen(false)} className="absolute top-4 right-4 text-wedding-brown/50 hover:text-wedding-brown">
+              <X className="h-5 w-5" />
+            </button>
+            <h3 className="text-xl font-bold text-wedding-dark font-jost mb-6">
+              {editingTemplateId ? 'Edit Message Template' : 'Create Message Template'}
+            </h3>
+
+            <form onSubmit={handleSaveTemplate} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Template Name</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={templateName} 
+                  onChange={(e) => setTemplateName(e.target.value)} 
+                  className="wedding-input" 
+                  placeholder="e.g. Invitation Reminder" 
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Message Type</label>
+                  <select 
+                    value={messageType} 
+                    onChange={(e) => setMessageType(e.target.value)} 
+                    className="wedding-input"
+                  >
+                    <option value="Invitation">Invitation</option>
+                    <option value="Reminder">Reminder</option>
+                    <option value="Announcement">Announcement</option>
+                    <option value="Custom">Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Audience</label>
+                  <select 
+                    value={audience} 
+                    onChange={(e) => setAudience(e.target.value)} 
+                    className="wedding-input"
+                  >
+                    <option value="all">All Guests</option>
+                    <option value="selected">Selected Guests</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-semibold uppercase text-wedding-brown/70">Message Content</label>
+                  <span className="text-[9px] text-wedding-brown/50 font-bold">Placeholders allowed</span>
+                </div>
+                <textarea 
+                  rows={5} 
+                  required
+                  value={messageContent} 
+                  onChange={(e) => setMessageContent(e.target.value)} 
+                  className="wedding-input text-xs"
+                  placeholder="Hello {{guestName}}, you are invited to {{eventName}}..."
+                />
+                <p className="text-[10px] text-wedding-brown/50 mt-1 leading-relaxed">
+                  Support dynamic placeholder tags: <strong className="font-mono text-[9px] bg-wedding-gold/10 px-1 py-0.5 rounded">{{guestName}}</strong>, <strong className="font-mono text-[9px] bg-wedding-gold/10 px-1 py-0.5 rounded">{{eventName}}</strong>, <strong className="font-mono text-[9px] bg-wedding-gold/10 px-1 py-0.5 rounded">{{venueName}}</strong>, <strong className="font-mono text-[9px] bg-wedding-gold/10 px-1 py-0.5 rounded">{{eventTime}}</strong>, <strong className="font-mono text-[9px] bg-wedding-gold/10 px-1 py-0.5 rounded">{{guestPortal}}</strong>
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-wedding-beige/25 border border-wedding-gold/10 rounded-xl">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-wedding-dark">Auto Attach Invitation Card</span>
+                  <span className="text-[10px] text-wedding-brown/60">Attach Sahjode/Sarva PDF card</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={autoAttachInvitation} 
+                    onChange={(e) => setAutoAttachInvitation(e.target.checked)} 
+                    className="sr-only peer" 
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-wedding-gold"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-wedding-beige/25 border border-wedding-gold/10 rounded-xl">
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-wedding-dark">Active Template State</span>
+                  <span className="text-[10px] text-wedding-brown/60">Toggle to enable or disable template</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={isActive} 
+                    onChange={(e) => setIsActive(e.target.checked)} 
+                    className="sr-only peer" 
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-wedding-gold"></div>
+                </label>
+              </div>
+
+              <button type="submit" className="gold-button w-full mt-4">
+                {editingTemplateId ? 'Save Message Template' : 'Create Message Template'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -556,162 +815,97 @@ export default function Notifications() {
         );
       })()}
 
-      {/* INVITATION CARDS MANAGEMENT SECTION */}
+      {/* MESSAGE TEMPLATE MANAGEMENT SECTION */}
       <div className="wedding-card bg-white p-6 mb-8 relative overflow-hidden">
         <div className="floral-corner-tl opacity-35"></div>
-        <h3 className="text-xl font-bold font-jost text-wedding-dark mb-2">Invitation Cards Templates</h3>
-        <p className="text-xs text-wedding-brown/70 mb-6">Upload separate PDF invitation cards for couples (Sahjode) and families (Sarva)</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Sahjode (Couple) Card */}
-          <div className="border border-wedding-gold/15 bg-wedding-beige/5 p-5 rounded-2xl flex flex-col justify-between">
-            <div>
-              <span className="inline-block text-[10px] font-bold tracking-widest uppercase bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full mb-3">
-                Sahjode (Couple)
-              </span>
-              <h4 className="text-sm font-semibold text-wedding-dark mb-1">Sahjode Invitation template</h4>
-              
-              {couple?.sahjodeCardUrl ? (
-                <div className="space-y-1.5 mt-2">
-                  <p className="text-xs text-green-700 font-semibold flex items-center gap-1">
-                    ✓ PDF Card Uploaded
-                  </p>
-                  <p className="text-[10px] text-wedding-brown/60">
-                    Uploaded By: <strong>{couple.sahjodeCardUploadedBy || 'Unknown'}</strong>
-                  </p>
-                  <p className="text-[10px] text-wedding-brown/60">
-                    Uploaded Date: <strong>{couple.sahjodeCardUploadedAt ? new Date(couple.sahjodeCardUploadedAt).toLocaleString() : 'N/A'}</strong>
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs text-wedding-brown/50 italic mt-2">No card template uploaded.</p>
-              )}
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-2">
-              {couple?.sahjodeCardUrl && (
-                <>
-                  <a 
-                    href={couple.sahjodeCardUrl} 
-                    target="_blank" 
-                    rel="noreferrer" 
-                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
-                  >
-                    <Eye className="h-3.5 w-3.5" /> Preview
-                  </a>
-                  <a 
-                    href={couple.sahjodeCardUrl} 
-                    download={`sahjode_invitation_${couple.slug}.pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Download
-                  </a>
-                </>
-              )}
-
-              {role !== 'superadmin' && (
-                <>
-                  <label className="gold-button text-xs py-1.5 px-3 flex items-center gap-1 cursor-pointer select-none">
-                    <Upload className="h-3.5 w-3.5" /> 
-                    {couple?.sahjodeCardUrl ? 'Replace' : 'Upload PDF'}
-                    <input 
-                      type="file" 
-                      accept=".pdf" 
-                      className="hidden" 
-                      onChange={(e) => handleCardUpload(e, 'sahjode')} 
-                    />
-                  </label>
-                  {couple?.sahjodeCardUrl && (
-                    <button 
-                      onClick={() => handleCardDelete('sahjode')} 
-                      className="p-1.5 hover:bg-red-50 text-red-600 rounded-xl transition-colors border border-red-100"
-                      title="Delete Template"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-xl font-bold font-jost text-wedding-dark mb-2">Message Templates</h3>
+            <p className="text-xs text-wedding-brown/70">Create reusable WhatsApp message templates for this function admin</p>
           </div>
-
-          {/* Sarva (Entire Family) Card */}
-          <div className="border border-wedding-gold/15 bg-wedding-beige/5 p-5 rounded-2xl flex flex-col justify-between">
-            <div>
-              <span className="inline-block text-[10px] font-bold tracking-widest uppercase bg-purple-50 text-purple-800 px-2.5 py-0.5 rounded-full mb-3">
-                Sarva (Family)
-              </span>
-              <h4 className="text-sm font-semibold text-wedding-dark mb-1">Sarva Invitation template</h4>
-              
-              {couple?.sarvaCardUrl ? (
-                <div className="space-y-1.5 mt-2">
-                  <p className="text-xs text-green-700 font-semibold flex items-center gap-1">
-                    ✓ PDF Card Uploaded
-                  </p>
-                  <p className="text-[10px] text-wedding-brown/60">
-                    Uploaded By: <strong>{couple.sarvaCardUploadedBy || 'Unknown'}</strong>
-                  </p>
-                  <p className="text-[10px] text-wedding-brown/60">
-                    Uploaded Date: <strong>{couple.sarvaCardUploadedAt ? new Date(couple.sarvaCardUploadedAt).toLocaleString() : 'N/A'}</strong>
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs text-wedding-brown/50 italic mt-2">No card template uploaded.</p>
-              )}
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-2">
-              {couple?.sarvaCardUrl && (
-                <>
-                  <a 
-                    href={couple.sarvaCardUrl} 
-                    target="_blank" 
-                    rel="noreferrer" 
-                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
-                  >
-                    <Eye className="h-3.5 w-3.5" /> Preview
-                  </a>
-                  <a 
-                    href={couple.sarvaCardUrl} 
-                    download={`sarva_invitation_${couple.slug}.pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Download
-                  </a>
-                </>
-              )}
-
-              {role !== 'superadmin' && (
-                <>
-                  <label className="gold-button text-xs py-1.5 px-3 flex items-center gap-1 cursor-pointer select-none">
-                    <Upload className="h-3.5 w-3.5" /> 
-                    {couple?.sarvaCardUrl ? 'Replace' : 'Upload PDF'}
-                    <input 
-                      type="file" 
-                      accept=".pdf" 
-                      className="hidden" 
-                      onChange={(e) => handleCardUpload(e, 'sarva')} 
-                    />
-                  </label>
-                  {couple?.sarvaCardUrl && (
-                    <button 
-                      onClick={() => handleCardDelete('sarva')} 
-                      className="p-1.5 hover:bg-red-50 text-red-600 rounded-xl transition-colors border border-red-100"
-                      title="Delete Template"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+          <button onClick={openCreateTemplateDialog} className="gold-button text-xs py-2 px-4 flex items-center gap-1.5 self-start md:self-auto">
+            <Plus className="h-4 w-4" />
+            Create Message
+          </button>
         </div>
+
+        {messageTemplates.length === 0 ? (
+          <div className="text-center py-10 bg-wedding-beige/10 rounded-2xl border border-wedding-gold/10">
+            <MessageSquare className="h-10 w-10 text-wedding-gold/40 mx-auto mb-3" />
+            <h4 className="text-sm font-bold text-wedding-dark">No Message Templates</h4>
+            <p className="text-xs text-wedding-brown/60 mt-1">Create templates without scheduling or sending anything yet.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {messageTemplates.map(templateItem => (
+              <div key={templateItem.id} className="border border-wedding-gold/15 bg-wedding-beige/5 p-5 rounded-2xl flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-wedding-gold/15 text-wedding-dark">
+                        {templateItem.messageType}
+                      </span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                        templateItem.isActive ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {templateItem.isActive ? 'Active' : 'Disabled'}
+                      </span>
+                      {templateItem.autoAttachInvitation && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-800">
+                          Auto Attach
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-sm font-bold text-wedding-dark truncate">{templateItem.templateName}</h4>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-wedding-brown/50 mt-1">
+                      {templateItem.audience === 'selected' ? 'Selected Guests' : 'All Guests'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleMessageTemplateStatus(templateItem)}
+                    className={`p-2 rounded-xl transition-colors border ${
+                      templateItem.isActive
+                        ? 'text-green-700 bg-green-50 border-green-100 hover:bg-green-100'
+                        : 'text-gray-500 bg-gray-50 border-gray-100 hover:bg-gray-100'
+                    }`}
+                    title={templateItem.isActive ? 'Disable Template' : 'Enable Template'}
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-wedding-brown/80 font-mono bg-white border border-wedding-gold/5 rounded-xl p-3 leading-relaxed max-h-28 overflow-y-auto">
+                  {templateItem.messageContent}
+                </p>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    onClick={() => openEditTemplateDialog(templateItem)}
+                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDuplicateMessageTemplate(templateItem.id)}
+                    className="outline-button text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMessageTemplate(templateItem.id)}
+                    className="p-1.5 hover:bg-red-50 text-red-600 rounded-xl transition-colors border border-red-100"
+                    title="Delete Template"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+
 
       {/* QUEUE LISTING */}
       {loading ? (

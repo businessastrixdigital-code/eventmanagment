@@ -233,7 +233,7 @@ export default function Events() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Time</label>
-                  <input type="text" required value={time} onChange={(e) => setTime(e.target.value)} className="wedding-input" placeholder="e.g. 7:00 PM" />
+                  <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className="wedding-input" />
                 </div>
               </div>
 
@@ -305,7 +305,7 @@ export default function Events() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase text-wedding-brown/70 mb-1">Time</label>
-                  <input type="text" required value={time} onChange={(e) => setTime(e.target.value)} className="wedding-input" />
+                  <input type="time" required value={time} onChange={(e) => setTime(e.target.value)} className="wedding-input" />
                 </div>
               </div>
 

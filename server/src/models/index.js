@@ -317,6 +317,8 @@ const dbWrapper = {
   PhotoAccessRequest: new ModelWrapper('PhotoAccessRequest', schema.photoAccessRequests),
   Wish: new ModelWrapper('Wish', schema.wishes),
   Notification: new ModelWrapper('Notification', schema.notifications),
+  MessageTemplate: new ModelWrapper('MessageTemplate', schema.messageTemplates),
+  MessageReminder: new ModelWrapper('MessageReminder', schema.messageReminders),
   Language: new ModelWrapper('Language', schema.languages, 'code'),
   AuditLog: new ModelWrapper('AuditLog', schema.auditLogs),
 };

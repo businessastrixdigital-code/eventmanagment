@@ -698,47 +698,7 @@ export default function InvitationPage() {
                           </div>
                         ))}
 
-                        {/* DYNAMIC CUSTOM RSVP FIELDS */}
-                        {customFields.map((field) => (
-                          <div key={field.id} className="space-y-1.5">
-                            <label className="block text-xs font-bold text-wedding-dark">
-                              {field.label}
-                              {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                            </label>
 
-                            {field.type === 'dropdown' ? (
-                              <select 
-                                required={field.required}
-                                value={customFieldAnswers[field.id] || ''}
-                                onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
-                                className="wedding-input py-2 text-xs"
-                              >
-                                <option value="">Select option</option>
-                                {field.options?.map((opt, idx) => (
-                                  <option key={idx} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            ) : field.type === 'checkbox' ? (
-                              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer text-wedding-dark">
-                                <input 
-                                  type="checkbox" 
-                                  checked={!!customFieldAnswers[field.id]}
-                                  onChange={(e) => handleCustomFieldChange(field.id, e.target.checked)}
-                                  className="accent-wedding-brown h-4.5 w-4.5"
-                                />
-                                Confirm selection
-                              </label>
-                            ) : (
-                              <input 
-                                type={field.type}
-                                required={field.required}
-                                value={customFieldAnswers[field.id] || ''}
-                                onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
-                                className="wedding-input py-2 text-xs"
-                              />
-                            )}
-                          </div>
-                        ))}
 
                         <button type="submit" className="gold-button w-full mt-4">
                           {t.submit_rsvp || "Submit RSVP"}

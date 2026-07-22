@@ -594,6 +594,334 @@ router.delete('/custom-fields/:id', verifyCouplePermission('editEvents'), async 
 });
 
 // 5. NOTIFICATION SCHEDULER
+const MESSAGE_TEMPLATE_TYPES = ['Invitation', 'Reminder', 'Announcement', 'Custom'];
+const MESSAGE_TEMPLATE_AUDIENCES = ['all', 'selected'];
+const REMINDER_TIMINGS = ['1_week_before', '1_day_before', '2_hours_before', 'custom'];
+
+const buildTemplatePayload = (body) => {
+  const templateName = typeof body.templateName === 'string' ? body.templateName.trim() : '';
+  const messageType = typeof body.messageType === 'string' ? body.messageType.trim() : '';
+  const audience = body.audience === 'selected' ? 'selected' : 'all';
+  const messageContent = typeof body.messageContent === 'string' ? body.messageContent.trim() : '';
+  const selectedGuestIds = Array.isArray(body.selectedGuestIds) ? body.selectedGuestIds.filter(Boolean) : [];
+
+  return {
+    templateName,
+    messageType,
+    audience,
+    selectedGuestIds,
+    messageContent,
+    autoAttachInvitation: !!body.autoAttachInvitation,
+    isActive: body.isActive === undefined ? true : !!body.isActive
+  };
+};
+
+const validateTemplatePayload = ({ templateName, messageType, audience, messageContent }) => {
+  if (!templateName) return 'Template Name is required.';
+  if (!messageType) return 'Message Type is required.';
+  if (!MESSAGE_TEMPLATE_TYPES.includes(messageType)) return 'Invalid Message Type.';
+  if (!MESSAGE_TEMPLATE_AUDIENCES.includes(audience)) return 'Invalid Audience.';
+  if (!messageContent) return 'Message is required.';
+  return null;
+};
+
+const requireFunctionAdminForTemplates = (req, res, next) => {
+  if (req.user.role !== 'couple') {
+    return res.status(403).json({ success: false, message: 'Only Function Admins can manage message templates.', errors: [] });
+  }
+  next();
+};
+
+const buildReminderPayload = (body) => {
+  const templateId = typeof body.templateId === 'string' ? body.templateId.trim() : '';
+  const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : '';
+  const timing = typeof body.timing === 'string' ? body.timing.trim() : '';
+  const parsedCustomMinutes = Number.parseInt(body.customMinutesBefore, 10);
+
+  return {
+    templateId,
+    eventId,
+    timing,
+    customMinutesBefore: timing === 'custom' && Number.isFinite(parsedCustomMinutes) ? parsedCustomMinutes : null,
+    isEnabled: body.isEnabled === undefined ? true : !!body.isEnabled
+  };
+};
+
+const validateReminderPayload = ({ templateId, eventId, timing, customMinutesBefore }) => {
+  if (!templateId) return 'Template is required.';
+  if (!eventId) return 'Event is required.';
+  if (!timing) return 'Timing is required.';
+  if (!REMINDER_TIMINGS.includes(timing)) return 'Invalid reminder timing.';
+  if (timing === 'custom' && (!customMinutesBefore || customMinutesBefore < 1)) {
+    return 'Custom timing must be at least 1 minute before the event.';
+  }
+  return null;
+};
+
+// GET /api/couple/message-templates - List message templates for the assigned function admin
+router.get('/message-templates', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const templates = await db.MessageTemplate.findAll({
+      where: { coupleId: req.user.id, hostGroup },
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({ success: true, data: templates });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch message templates.', errors: [err.message] });
+  }
+});
+
+// POST /api/couple/message-templates - Create a reusable message template
+router.post('/message-templates', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const payload = buildTemplatePayload(req.body);
+    const validationError = validateTemplatePayload(payload);
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError, errors: [validationError] });
+    }
+
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const template = await db.MessageTemplate.create({
+      coupleId: req.user.id,
+      hostGroup,
+      ...payload
+    });
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: 'CREATE_MESSAGE_TEMPLATE',
+      targetId: template.id,
+      reason: `Created message template "${template.templateName}" for ${hostGroup}.`
+    });
+
+    return res.status(201).json({ success: true, message: 'Message template created.', data: template });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to create message template.', errors: [err.message] });
+  }
+});
+
+// PUT /api/couple/message-templates/:id - Edit a reusable message template
+router.put('/message-templates/:id', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const template = await db.MessageTemplate.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Message template not found or access denied.', errors: [] });
+    }
+
+    const payload = buildTemplatePayload(req.body);
+    const validationError = validateTemplatePayload(payload);
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError, errors: [validationError] });
+    }
+
+    Object.assign(template, payload);
+    await template.save();
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: 'UPDATE_MESSAGE_TEMPLATE',
+      targetId: template.id,
+      reason: `Updated message template "${template.templateName}".`
+    });
+
+    return res.json({ success: true, message: 'Message template updated.', data: template });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to update message template.', errors: [err.message] });
+  }
+});
+
+// POST /api/couple/message-templates/:id/duplicate - Duplicate a reusable message template
+router.post('/message-templates/:id/duplicate', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const template = await db.MessageTemplate.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Message template not found or access denied.', errors: [] });
+    }
+
+    const duplicate = await db.MessageTemplate.create({
+      coupleId: req.user.id,
+      hostGroup,
+      templateName: `${template.templateName} Copy`,
+      messageType: template.messageType,
+      audience: template.audience,
+      selectedGuestIds: template.selectedGuestIds || [],
+      messageContent: template.messageContent,
+      autoAttachInvitation: !!template.autoAttachInvitation,
+      isActive: !!template.isActive
+    });
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: 'DUPLICATE_MESSAGE_TEMPLATE',
+      targetId: duplicate.id,
+      reason: `Duplicated message template "${template.templateName}".`
+    });
+
+    return res.status(201).json({ success: true, message: 'Message template duplicated.', data: duplicate });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to duplicate message template.', errors: [err.message] });
+  }
+});
+
+// PATCH /api/couple/message-templates/:id/status - Enable or disable a reusable message template
+router.patch('/message-templates/:id/status', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const template = await db.MessageTemplate.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Message template not found or access denied.', errors: [] });
+    }
+
+    template.isActive = !!req.body.isActive;
+    await template.save();
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: template.isActive ? 'ENABLE_MESSAGE_TEMPLATE' : 'DISABLE_MESSAGE_TEMPLATE',
+      targetId: template.id,
+      reason: `${template.isActive ? 'Enabled' : 'Disabled'} message template "${template.templateName}".`
+    });
+
+    return res.json({ success: true, message: `Message template ${template.isActive ? 'enabled' : 'disabled'}.`, data: template });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to update message template status.', errors: [err.message] });
+  }
+});
+
+// DELETE /api/couple/message-templates/:id - Delete a reusable message template
+router.delete('/message-templates/:id', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const template = await db.MessageTemplate.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Message template not found or access denied.', errors: [] });
+    }
+
+    const templateName = template.templateName;
+    await template.destroy();
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: 'DELETE_MESSAGE_TEMPLATE',
+      targetId: req.params.id,
+      reason: `Deleted message template "${templateName}".`
+    });
+
+    return res.json({ success: true, message: 'Message template deleted.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to delete message template.', errors: [err.message] });
+  }
+});
+
+// GET /api/couple/message-reminders - List configured reminders only, without scheduling or sending
+router.get('/message-reminders', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const reminders = await db.MessageReminder.findAll({
+      where: { coupleId: req.user.id, hostGroup },
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({ success: true, data: reminders });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch message reminders.', errors: [err.message] });
+  }
+});
+
+// POST /api/couple/message-reminders - Save reminder configuration only
+router.post('/message-reminders', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const payload = buildReminderPayload(req.body);
+    const validationError = validateReminderPayload(payload);
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError, errors: [validationError] });
+    }
+
+    const template = await db.MessageTemplate.findOne({
+      where: { id: payload.templateId, coupleId: req.user.id, hostGroup }
+    });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Template not found or access denied.', errors: [] });
+    }
+
+    const event = await db.Event.findOne({ where: { id: payload.eventId, coupleId: req.user.id } });
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found or access denied.', errors: [] });
+    }
+
+    const reminder = await db.MessageReminder.create({
+      coupleId: req.user.id,
+      hostGroup,
+      ...payload
+    });
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: 'CREATE_MESSAGE_REMINDER',
+      targetId: reminder.id,
+      reason: `Configured reminder for event "${event.title}" using template "${template.templateName}".`
+    });
+
+    return res.status(201).json({ success: true, message: 'Reminder saved.', data: reminder });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to save reminder.', errors: [err.message] });
+  }
+});
+
+// PATCH /api/couple/message-reminders/:id/status - Enable or disable reminder configuration
+router.patch('/message-reminders/:id/status', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const reminder = await db.MessageReminder.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!reminder) {
+      return res.status(404).json({ success: false, message: 'Reminder not found or access denied.', errors: [] });
+    }
+
+    reminder.isEnabled = !!req.body.isEnabled;
+    await reminder.save();
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: reminder.isEnabled ? 'ENABLE_MESSAGE_REMINDER' : 'DISABLE_MESSAGE_REMINDER',
+      targetId: reminder.id,
+      reason: `${reminder.isEnabled ? 'Enabled' : 'Disabled'} message reminder configuration.`
+    });
+
+    return res.json({ success: true, message: `Reminder ${reminder.isEnabled ? 'enabled' : 'disabled'}.`, data: reminder });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to update reminder status.', errors: [err.message] });
+  }
+});
+
+// DELETE /api/couple/message-reminders/:id - Delete reminder configuration only
+router.delete('/message-reminders/:id', verifyCouplePermission('sendNotifications'), requireFunctionAdminForTemplates, async (req, res) => {
+  try {
+    const hostGroup = req.user.hostGroup || 'HOST_A';
+    const reminder = await db.MessageReminder.findOne({ where: { id: req.params.id, coupleId: req.user.id, hostGroup } });
+    if (!reminder) {
+      return res.status(404).json({ success: false, message: 'Reminder not found or access denied.', errors: [] });
+    }
+
+    await reminder.destroy();
+
+    await db.AuditLog.create({
+      actorId: req.user.id,
+      action: 'DELETE_MESSAGE_REMINDER',
+      targetId: req.params.id,
+      reason: 'Deleted message reminder configuration.'
+    });
+
+    return res.json({ success: true, message: 'Reminder deleted.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Failed to delete reminder.', errors: [err.message] });
+  }
+});
+
 // GET /api/couple/notifications - List scheduled & historical notifications
 router.get('/notifications', async (req, res) => {
   try {
@@ -978,6 +1306,96 @@ router.get('/sessions', async (req, res) => {
       { id: 'sess-2', device: 'Safari / iPhone', ip: '192.168.1.15', loginAt: new Date(Date.now() - 86400000) }
     ]
   });
+});
+
+// ─── 10. CUSTOM MESSAGE TEMPLATES (Multi-language) ────────────────────────────
+
+// GET /api/couple/message-templates — List all templates for this couple
+router.get('/message-templates', authenticate, async (req, res) => {
+  try {
+    const templates = await db.MessageTemplate.findAll({
+      where: { coupleId: req.user.coupleId },
+      order: [['createdAt', 'DESC']],
+    });
+    return res.json(templates);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to fetch message templates.', details: err.message });
+  }
+});
+
+// POST /api/couple/message-templates — Create a new template
+router.post('/message-templates', authenticate, async (req, res) => {
+  const { name, messageType, audience, contentEn, contentHi, contentGu } = req.body;
+
+  if (!name || !messageType) {
+    return res.status(400).json({ error: 'Template name and message type are required.' });
+  }
+
+  try {
+    const template = await db.MessageTemplate.create({
+      coupleId: req.user.coupleId,
+      templateName: name,
+      name,
+      messageType,
+      audience: audience || 'all',
+      contentEn: contentEn || '',
+      contentHi: contentHi || '',
+      contentGu: contentGu || '',
+      messageContent: contentEn || contentHi || contentGu || '',
+      isActive: true,
+    });
+    return res.status(201).json(template);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to create message template.', details: err.message });
+  }
+});
+
+// PUT /api/couple/message-templates/:id — Update a template
+router.put('/message-templates/:id', authenticate, async (req, res) => {
+  const { name, messageType, audience, contentEn, contentHi, contentGu } = req.body;
+
+  try {
+    const template = await db.MessageTemplate.findOne({
+      where: { id: req.params.id, coupleId: req.user.coupleId },
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found.' });
+    }
+
+    await template.update({
+      templateName: name || template.templateName,
+      name: name || template.name,
+      messageType: messageType || template.messageType,
+      audience: audience || template.audience,
+      contentEn: contentEn !== undefined ? contentEn : template.contentEn,
+      contentHi: contentHi !== undefined ? contentHi : template.contentHi,
+      contentGu: contentGu !== undefined ? contentGu : template.contentGu,
+      messageContent: contentEn || contentHi || contentGu || template.messageContent,
+    });
+
+    return res.json(template);
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to update message template.', details: err.message });
+  }
+});
+
+// DELETE /api/couple/message-templates/:id — Delete a template
+router.delete('/message-templates/:id', authenticate, async (req, res) => {
+  try {
+    const template = await db.MessageTemplate.findOne({
+      where: { id: req.params.id, coupleId: req.user.coupleId },
+    });
+
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found.' });
+    }
+
+    await template.destroy();
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to delete message template.', details: err.message });
+  }
 });
 
 export default router;

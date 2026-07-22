@@ -143,7 +143,41 @@ export const notifications = sqliteTable('Notifications', {
   updatedAt: text('updatedAt'),
 });
 
-// 10. Language
+// 10. Message Template
+export const messageTemplates = sqliteTable('MessageTemplates', {
+  id: text('id').primaryKey(),
+  coupleId: text('coupleId').notNull().references(() => couples.id, { onDelete: 'cascade' }),
+  hostGroup: text('hostGroup').notNull().default('HOST_A'),
+  templateName: text('templateName').notNull(),
+  name: text('name').default(''),
+  messageType: text('messageType').notNull(),
+  audience: text('audience').notNull().default('all'),
+  selectedGuestIds: text('selectedGuestIds', { mode: 'json' }),
+  messageContent: text('messageContent').notNull(),
+  contentEn: text('contentEn').default(''),
+  contentHi: text('contentHi').default(''),
+  contentGu: text('contentGu').default(''),
+  autoAttachInvitation: integer('autoAttachInvitation', { mode: 'boolean' }).default(false),
+  isActive: integer('isActive', { mode: 'boolean' }).default(true),
+  createdAt: text('createdAt'),
+  updatedAt: text('updatedAt'),
+});
+
+// 11. Message Reminder
+export const messageReminders = sqliteTable('MessageReminders', {
+  id: text('id').primaryKey(),
+  coupleId: text('coupleId').notNull().references(() => couples.id, { onDelete: 'cascade' }),
+  hostGroup: text('hostGroup').notNull().default('HOST_A'),
+  templateId: text('templateId').notNull().references(() => messageTemplates.id, { onDelete: 'cascade' }),
+  eventId: text('eventId').notNull().references(() => events.id, { onDelete: 'cascade' }),
+  timing: text('timing').notNull(),
+  customMinutesBefore: integer('customMinutesBefore'),
+  isEnabled: integer('isEnabled', { mode: 'boolean' }).default(true),
+  createdAt: text('createdAt'),
+  updatedAt: text('updatedAt'),
+});
+
+// 12. Language
 export const languages = sqliteTable('Languages', {
   code: text('code').primaryKey(),
   label: text('label').notNull(),
@@ -152,7 +186,7 @@ export const languages = sqliteTable('Languages', {
   updatedAt: text('updatedAt'),
 });
 
-// 11. AuditLog
+// 13. AuditLog
 export const auditLogs = sqliteTable('AuditLogs', {
   id: text('id').primaryKey(),
   actorId: text('actorId').notNull(),
@@ -173,12 +207,15 @@ export const couplesRelations = relations(couples, ({ many }) => ({
   photoAccessRequests: many(photoAccessRequests),
   wishes: many(wishes),
   notifications: many(notifications),
+  messageTemplates: many(messageTemplates),
+  messageReminders: many(messageReminders),
 }));
 
 export const eventsRelations = relations(events, ({ one, many }) => ({
   couple: one(couples, { fields: [events.coupleId], references: [couples.id] }),
   photos: many(photos),
   notifications: many(notifications),
+  messageReminders: many(messageReminders),
 }));
 
 export const guestsRelations = relations(guests, ({ one, many }) => ({
@@ -207,4 +244,14 @@ export const wishesRelations = relations(wishes, ({ one }) => ({
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   couple: one(couples, { fields: [notifications.coupleId], references: [couples.id] }),
   event: one(events, { fields: [notifications.eventId], references: [events.id] }),
+}));
+
+export const messageTemplatesRelations = relations(messageTemplates, ({ one }) => ({
+  couple: one(couples, { fields: [messageTemplates.coupleId], references: [couples.id] }),
+}));
+
+export const messageRemindersRelations = relations(messageReminders, ({ one }) => ({
+  couple: one(couples, { fields: [messageReminders.coupleId], references: [couples.id] }),
+  template: one(messageTemplates, { fields: [messageReminders.templateId], references: [messageTemplates.id] }),
+  event: one(events, { fields: [messageReminders.eventId], references: [events.id] }),
 }));

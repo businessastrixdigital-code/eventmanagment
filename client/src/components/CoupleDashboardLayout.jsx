@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { 
-  Heart, Home, Calendar, Users, FileText, Bell, Image, Sliders, Settings, LogOut, Radio, AlertCircle
+  Heart, Home, Calendar, Users, FileText, Bell, Image, Sliders, Settings, LogOut, Radio, AlertCircle, MessageSquare
 } from 'lucide-react';
 
 const coupleTranslations = {
@@ -20,7 +20,9 @@ const coupleTranslations = {
     dashboard: 'DASHBOARD',
     logged_in: 'Logged in',
     invite_link_label: 'Your Wedding Invite Link',
-    language_label: 'Language / भाषा / ભાષા'
+    language_label: 'Language / भाषा / ભાષા',
+    card_templates: 'Invitation Cards',
+    custom_messages: 'Custom Messages',
   },
   hi: {
     overview: 'अवलोकन',
@@ -35,7 +37,9 @@ const coupleTranslations = {
     dashboard: 'डैशबोर्ड',
     logged_in: 'लॉग इन',
     invite_link_label: 'आपकी शादी का आमंत्रण लिंक',
-    language_label: 'भाषा / Language / ભાષા'
+    language_label: 'भाषा / Language / ભાષા',
+    card_templates: 'निमंत्रण पत्र',
+    custom_messages: 'कस्टम संदेश',
   },
   gu: {
     overview: 'વિહંગાવલોકન',
@@ -50,7 +54,9 @@ const coupleTranslations = {
     dashboard: 'ડેશબોર્ડ',
     logged_in: 'લૉગ ઇન',
     invite_link_label: 'તમારી લગ્ન આમંત્રણ લિંક',
-    language_label: 'ભાષા / Language / भाषा'
+    language_label: 'ભાષા / Language / भाषा',
+    card_templates: 'આમંત્રણ પત્રિકા',
+    custom_messages: 'કસ્ટમ સંદેશ',
   }
 };
 
@@ -128,7 +134,8 @@ export default function CoupleDashboardLayout({ children }) {
     { name: translations.overview, path: '/dashboard', icon: Home, show: true },
     { name: translations.events_plan, path: '/dashboard/events', icon: Calendar, show: permissions.editEvents },
     { name: translations.guest_list, path: '/dashboard/guests', icon: Users, show: permissions.manageGuests },
-    { name: translations.rsvp_builder, path: '/dashboard/form-builder', icon: FileText, show: permissions.editEvents },
+    { name: translations.card_templates, path: '/dashboard/invitation-templates', icon: FileText, show: permissions.editEvents },
+    { name: translations.custom_messages, path: '/dashboard/custom-messages', icon: MessageSquare, show: permissions.sendNotifications },
     { name: translations.message_scheduler, path: '/dashboard/notifications', icon: Bell, show: permissions.sendNotifications },
     { name: translations.photo_gallery, path: '/dashboard/photos', icon: Image, show: permissions.managePhotos },
     { name: translations.website_design, path: '/dashboard/website-editor', icon: Sliders, show: permissions.editEvents },
