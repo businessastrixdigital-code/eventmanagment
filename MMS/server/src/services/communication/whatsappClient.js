@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const getServiceUrl = () => (process.env.WHATSAPP_SERVICE_URL || 'http://localhost:4000').replace(/\/+$/, '');
+const getServiceUrl = () => (process.env.WHATSAPP_SERVICE_URL || (process.env.NODE_ENV === 'production' ? 'https://bulk-whatsapp-service.onrender.com' : 'http://127.0.0.1:3000')).replace(/\/+$/, '');
 const getApiKey = () => process.env.WHATSAPP_SERVICE_API_KEY || '';
 
 const makeRequest = async (endpoint, method = 'GET', body = null) => {
