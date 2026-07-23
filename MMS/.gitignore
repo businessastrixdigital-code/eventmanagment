@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contains secrets — never commit)
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# Local SQLite artifacts (this project no longer uses local SQLite, but ignore
+# defensively in case a stray file ever gets generated during local dev)
+*.sqlite
+*.sqlite3
+
+# Local upload scratch dir (photos live on Cloudinary now, but ignore just in case)
+uploads/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

@@ -1,33 +1,40 @@
 # Dependencies
 node_modules/
+*/node_modules/
+*/*/node_modules/
 
-# Environment variables (contains secrets — never commit)
+# Environment files
 .env
-.env.local
-.env.*.local
+*.env
+*/.env
+*/*/.env
 
-# Build output
+# Build outputs
 dist/
 build/
+*/dist/
 
-# Local SQLite artifacts (this project no longer uses local SQLite, but ignore
-# defensively in case a stray file ever gets generated during local dev)
+# SQLite & local databases
+*.db
 *.sqlite
-*.sqlite3
+*.db-journal
+*.db-wal
+MMS/server/src/database/*.db
+MMS/server/src/database/*.sqlite
 
-# Local upload scratch dir (photos live on Cloudinary now, but ignore just in case)
-uploads/
+# Bulk WhatsApp temporary files & session data
+bulk-whatsapp/sessions/
+bulk-whatsapp/temp/
+bulk-whatsapp/logs/
+.wwebjs_auth/
+.wwebjs_cache/
+*/.wwebjs_auth/
+*/.wwebjs_cache/
+*/*/.wwebjs_auth/
+*/*/.wwebjs_cache/
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.log
-
-# OS files
+# IDE & OS
 .DS_Store
 Thumbs.db
-
-# Editor
 .vscode/
 .idea/
